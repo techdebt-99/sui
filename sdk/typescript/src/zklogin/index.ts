@@ -4,3 +4,4 @@
 export { getZkLoginSignature, parseZkLoginSignature } from './signature.js';
 export { toBigEndianBytes } from './utils.js';
 export { computeZkLoginAddressFromSeed } from './address.js';
+export { zkLoginSignature, type ZkLoginSignature, type ZkLoginSignatureInputs } from './bcs.js';
