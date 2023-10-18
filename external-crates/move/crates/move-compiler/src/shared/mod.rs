@@ -6,7 +6,9 @@ use crate::{
     cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
     command_line as cli,
     diagnostics::{
-        codes::{Category, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter},
+        codes::{
+            Category, Declarations, DiagnosticsID, Severity, Syntax, UnusedItem, WarningFilter,
+        },
         Diagnostic, Diagnostics, WarningFilters,
     },
     editions::{
@@ -159,6 +161,7 @@ pub const FILTER_UNUSED_CONST: &str = "unused_const";
 pub const FILTER_DEAD_CODE: &str = "dead_code";
 pub const FILTER_UNUSED_LET_MUT: &str = "unused_let_mut";
 pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
+pub const FILTER_UNNEEDED_RETURN: &str = "unneeded_return";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
@@ -349,6 +352,11 @@ impl CompilationEnv {
             known_code_filter!(
                 FILTER_UNUSED_MUT_REF,
                 UnusedItem::MutReference,
+                filter_attr_name
+            ),
+            known_code_filter!(
+                FILTER_UNNEEDED_RETURN,
+                Syntax::UnnecessaryReturn,
                 filter_attr_name
             ),
         ]);

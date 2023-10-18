@@ -1,5 +1,6 @@
 //# run
 script {
+#[allow(unneeded_return)]
 fun main() {
     if (true) {
         loop { if (true) return () else break }
