@@ -17,6 +17,7 @@ use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
 use sui_core::state_accumulator::StateAccumulator;
+use sui_storage::execution_cache::ExecutionCache;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
@@ -30,8 +31,8 @@ use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::object::Object;
 use sui_types::transaction::{
-    CertifiedTransaction, Transaction, VerifiedCertificate, VerifiedTransaction,
-    DEFAULT_VALIDATOR_GAS_PRICE,
+    CertifiedTransaction, Transaction, TransactionDataAPI, VerifiedCertificate,
+    VerifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE,
 };
 use tokio::sync::broadcast;
 
@@ -173,17 +174,26 @@ impl SingleValidator {
         store: InMemoryObjectStore,
         transaction: Transaction,
     ) -> TransactionEffects {
+        let tx_digest = transaction.digest();
+        let input_objects = transaction.transaction_data().input_objects().unwrap();
+        let objects = store
+            .notify_read_objects_for_execution(
+                &*self.epoch_store,
+                tx_digest,
+                &input_objects,
+                self.epoch_store.epoch(),
+            )
+            .await
+            .unwrap();
         let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
             VerifiedTransaction::new_unchecked(transaction),
             0,
         );
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
-            &store,
-            &store,
             &executable,
+            &objects,
             self.epoch_store.protocol_config(),
             self.epoch_store.reference_gas_price(),
-            self.epoch_store.epoch(),
         )
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();

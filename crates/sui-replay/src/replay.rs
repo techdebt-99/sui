@@ -1660,6 +1660,7 @@ impl LocalExec {
                 }
                 InputObjectKind::SharedMoveObject { .. } => None,
             })
+            .map(|(kind, obj)| (kind, Arc::new(obj.clone())))
             .collect();
 
         // Use the transaction dependency info that we computed above for the deleted shared

@@ -4,9 +4,11 @@
 use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Result;
+use futures::FutureExt;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_storage::execution_cache::ExecutionCache;
 use sui_types::{
     committee::{Committee, EpochId},
     effects::TransactionEffects,
@@ -17,7 +19,7 @@ use sui_types::{
         epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
         SuiSystemState, SuiSystemStateTrait,
     },
-    transaction::VerifiedTransaction,
+    transaction::{TransactionDataAPI, VerifiedTransaction},
 };
 
 use crate::store::InMemoryStore;
@@ -92,20 +94,27 @@ impl EpochState {
         TransactionEffects,
         Result<(), sui_types::error::ExecutionError>,
     )> {
+        let tx_digest = *transaction.digest();
+        let input_object_kinds = transaction.data().intent_message().value.input_objects()?;
+        let input_objects = store
+            .read_objects_for_synchronous_execution(&tx_digest, &input_object_kinds)
+            .now_or_never()
+            .expect("simulacrum store must be synchronous")?;
+
         // Run the transaction input checks that would run when submitting the txn to a validator
         // for signing
-        let (gas_status, input_objects) = sui_transaction_checks::check_transaction_input(
+        let (gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
             store,
             &self.protocol_config,
             self.epoch_start_state.reference_gas_price(),
             self.epoch(),
             transaction.data().transaction_data(),
+            &input_objects,
             transaction.tx_signatures(),
             deny_config,
             &self.bytecode_verifier_metrics,
         )?;
 
-        let tx_digest = *transaction.digest();
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas) = transaction_data.execution_parts();
         Ok(self.executor.execute_transaction_to_effects(
@@ -116,7 +125,7 @@ impl EpochState {
             &HashSet::new(), // certificate_deny_set
             &self.epoch_start_state.epoch(),
             self.epoch_start_state.epoch_start_timestamp_ms(),
-            input_objects,
+            checked_input_objects,
             gas,
             gas_status,
             kind,

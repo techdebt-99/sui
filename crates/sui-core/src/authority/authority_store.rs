@@ -418,11 +418,11 @@ impl AuthorityStore {
         }
     }
 
-    pub fn is_shared_object_deleted(
+    pub fn get_last_shared_object_deletion_info(
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> SuiResult<bool> {
+    ) -> Result<Option<(SequenceNumber, TransactionDigest)>, TypedStoreError> {
         let object_key = ObjectKey::max_for_id(object_id);
         let marker_key = (epoch_id, object_key);
 
@@ -433,17 +433,29 @@ impl AuthorityStore {
             .skip_prior_to(&marker_key)?
             .next();
         match marker_entry {
-            Some(((epoch, key), marker)) => {
+            // Make sure the object was deleted or wrapped.
+            Some(((epoch, key), MarkerValue::SharedDeleted(digest))) => {
                 // Make sure object id matches and version is >= `version`
                 let object_id_matches = key.0 == *object_id;
                 // Make sure we don't have a stale epoch for some reason (e.g., a revert)
                 let epoch_data_ok = epoch == epoch_id;
-                // Make sure the object was deleted or wrapped.
-                let mark_data_ok = matches!(marker, MarkerValue::SharedDeleted(_));
-                Ok(object_id_matches && epoch_data_ok && mark_data_ok)
+                if object_id_matches && epoch_data_ok {
+                    Ok(Some((key.1, digest)))
+                } else {
+                    Ok(None)
+                }
             }
-            None => Ok(false),
+            _ => Ok(None),
         }
+    }
+
+    pub fn is_shared_object_deleted(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<bool> {
+        self.get_last_shared_object_deletion_info(object_id, epoch_id)
+            .map(|info| info.is_some())
     }
 
     /// Returns future containing the state hash for the given epoch
@@ -1631,6 +1643,16 @@ impl AuthorityStore {
     ) -> Result<Option<ObjectRef>, SuiError> {
         self.perpetual_tables
             .get_latest_object_ref_or_tombstone(object_id)
+    }
+
+    pub fn get_latest_object_ref(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<ObjectRef>, SuiError> {
+        match self.get_latest_object_ref_or_tombstone(object_id)? {
+            Some(objref) if objref.2.is_alive() => Ok(Some(objref)),
+            _ => Ok(None),
+        }
     }
 
     /// Returns the latest object we have for this object_id in the objects table.

@@ -3,26 +3,35 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use async_trait::async_trait;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use std::sync::Arc;
 use sui_config::genesis;
+use sui_storage::execution_cache::ExecutionCache;
 use sui_types::{
-    base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
+    base_types::{
+        AuthorityName, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionEffectsDigest,
+    },
     committee::{Committee, EpochId},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::SuiError,
+    error::{SuiError, SuiResult},
+    inner_temporary_store::InnerTemporaryStore,
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
         VerifiedCheckpoint,
     },
     object::{Object, Owner},
     storage::{
-        BackingPackageStore, ChildObjectResolver, MarkerTableQuery, ObjectStore, ParentSync,
+        BackingPackageStore, ChildObjectResolver, GetSharedLocks, MarkerTableQuery, ObjectStore,
+        ParentSync,
     },
-    transaction::VerifiedTransaction,
+    transaction::{
+        InputObjectKind, ObjectReadResult, VerifiedSignedTransaction, VerifiedTransaction,
+    },
 };
 
 #[derive(Debug, Default)]
@@ -424,6 +433,90 @@ impl KeyStore {
 
     pub fn accounts(&self) -> impl Iterator<Item = (&SuiAddress, &AccountKeyPair)> {
         self.account_keys.iter()
+    }
+}
+
+#[allow(unused_variables)]
+#[async_trait]
+impl ExecutionCache for InMemoryStore {
+    async fn notify_read_objects_for_signing(
+        &self,
+        tx_digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+        epoch_id: EpochId,
+    ) -> SuiResult<Vec<ObjectReadResult>> {
+        todo!()
+    }
+
+    async fn read_objects_for_synchronous_execution(
+        &self,
+        tx_digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+    ) -> SuiResult<Vec<ObjectReadResult>> {
+        Ok(objects
+            .iter()
+            .map(|input_kind| {
+                let obj = match input_kind {
+                    InputObjectKind::MovePackage(id) => self.get_object(id).unwrap(),
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                        self.get_object_at_version(&objref.0, objref.1).unwrap()
+                    }
+                    InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id).unwrap(),
+                };
+                ObjectReadResult::new(*input_kind, obj.clone().into())
+            })
+            .collect())
+    }
+
+    async fn lock_transaction(
+        &self,
+        signed_transaction: VerifiedSignedTransaction,
+        mutable_input_objects: &[ObjectRef],
+    ) -> SuiResult {
+        todo!()
+    }
+
+    async fn notify_read_objects_for_execution(
+        &self,
+        shared_lock_store: &dyn GetSharedLocks,
+        tx_digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+        epoch_id: EpochId,
+    ) -> SuiResult<Vec<ObjectReadResult>> {
+        todo!()
+    }
+
+    fn read_child_object(
+        &self,
+        tx_digest: &TransactionDigest,
+        object: &ObjectID,
+        version_bound: SequenceNumber,
+    ) -> SuiResult<Arc<Object>> {
+        todo!()
+    }
+
+    async fn write_transaction_outputs(
+        &self,
+        inner_temporary_store: InnerTemporaryStore,
+        effects: &TransactionEffects,
+        transaction: &VerifiedTransaction,
+        epoch_id: EpochId,
+    ) -> SuiResult {
+        todo!()
+    }
+
+    async fn notify_read_effects_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<TransactionEffectsDigest> {
+        todo!()
+    }
+
+    async fn read_effects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<Option<TransactionEffects>> {
+        todo!()
     }
 }
 

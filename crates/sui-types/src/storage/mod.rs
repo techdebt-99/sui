@@ -522,7 +522,7 @@ where
     }
 }
 
-pub trait GetSharedLocks {
+pub trait GetSharedLocks: Send + Sync {
     fn get_shared_locks(
         &self,
         transaction_digest: &TransactionDigest,

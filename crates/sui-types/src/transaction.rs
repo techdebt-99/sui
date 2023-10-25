@@ -34,6 +34,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -2409,16 +2410,94 @@ impl InputObjectKind {
     pub fn is_shared_object(&self) -> bool {
         matches!(self, Self::SharedMoveObject { .. })
     }
+
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            Self::MovePackage(..) => false,
+            Self::ImmOrOwnedMoveObject((_, _, _)) => true,
+            Self::SharedMoveObject { mutable, .. } => *mutable,
+        }
+    }
+}
+
+/// The result of reading an object for execution. Because shared objects may be deleted, one
+/// possible result of calling ExecutionCache::notify_read_objects_for_execution on a shared object
+/// is that ObjectReadResultKind::Deleted is returned.
+#[derive(Clone, Debug)]
+pub struct ObjectReadResult {
+    pub input_object_kind: InputObjectKind,
+    pub object: ObjectReadResultKind,
+}
+
+#[derive(Clone, Debug)]
+pub enum ObjectReadResultKind {
+    Object(Arc<Object>),
+    // TODO: rename to DeletedSharedObject
+    // The version of the object that the transaction intended to read, and the digest of the tx
+    // that deleted it.
+    DeletedSharedObject(SequenceNumber, TransactionDigest),
+}
+
+impl From<Object> for ObjectReadResultKind {
+    fn from(object: Object) -> Self {
+        Self::Object(Arc::new(object))
+    }
+}
+
+impl ObjectReadResult {
+    pub fn new(input_object_kind: InputObjectKind, object: ObjectReadResultKind) -> Self {
+        Self {
+            input_object_kind,
+            object,
+        }
+    }
+
+    pub fn id(&self) -> ObjectID {
+        self.input_object_kind.object_id()
+    }
+
+    pub fn as_object(&self) -> Option<&Arc<Object>> {
+        match &self.object {
+            ObjectReadResultKind::Object(object) => Some(object),
+            ObjectReadResultKind::DeletedSharedObject(_, _) => None,
+        }
+    }
+
+    pub fn new_from_gas_object(gas: &Object) -> Self {
+        let objref = gas.compute_object_reference();
+        Self {
+            input_object_kind: InputObjectKind::ImmOrOwnedMoveObject(objref),
+            object: ObjectReadResultKind::Object(Arc::new(gas.clone())),
+        }
+    }
+
+    pub fn is_mutable(&self) -> bool {
+        self.input_object_kind.is_mutable()
+    }
+
+    pub fn is_deleted(&self) -> bool {
+        self.deletion_info().is_some()
+    }
+
+    pub fn deletion_info(&self) -> Option<(SequenceNumber, TransactionDigest)> {
+        match &self.object {
+            ObjectReadResultKind::DeletedSharedObject(v, tx) => Some((*v, *tx)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct InputObjects {
-    objects: Vec<(InputObjectKind, Object)>,
+    objects: Vec<(InputObjectKind, Arc<Object>)>,
     deleted: DeletedSharedObjects,
 }
 
 impl InputObjects {
-    pub fn new(objects: Vec<(InputObjectKind, Object)>, deleted: DeletedSharedObjects) -> Self {
+    pub fn new(
+        objects: Vec<(InputObjectKind, Arc<Object>)>,
+        deleted: DeletedSharedObjects,
+    ) -> Self {
         Self { objects, deleted }
     }
 
@@ -2520,7 +2599,7 @@ impl InputObjects {
         SequenceNumber::lamport_increment(input_versions)
     }
 
-    pub fn into_objects(self) -> Vec<(InputObjectKind, Object)> {
+    pub fn into_objects(self) -> Vec<(InputObjectKind, Arc<Object>)> {
         self.objects
     }
 
@@ -2528,7 +2607,7 @@ impl InputObjects {
         self.objects.iter().map(|(kind, _)| kind)
     }
 
-    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
+    pub fn into_object_map(self) -> BTreeMap<ObjectID, Arc<Object>> {
         self.objects
             .into_iter()
             .map(|(_, object)| (object.id(), object))

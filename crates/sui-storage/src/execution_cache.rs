@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use std::sync::Arc;
 use sui_types::{
+    base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
     digests::{TransactionDigest, TransactionEffectsDigest},
+    effects::{TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
-    storage::ObjectKey,
+    inner_temporary_store::InnerTemporaryStore,
+    object::Object,
+    storage::{GetSharedLocks, ObjectKey},
+    transaction::{
+        InputObjectKind, ObjectReadResult, VerifiedSignedTransaction, VerifiedTransaction,
+    },
 };
-
-/// The result of reading an object for execution. Because shared objects may be deleted, one
-/// possible result of calling ExecutionCache::notify_read_objects_for_execution on a shared object
-/// is that ObjectReadResult::Deleted is returned.
-pub enum ObjectReadResult {
-    Object(Arc<Object>),
-    Deleted,
-}
 
 /// ExecutionCache is intended to provide an in-memory, write-behind or write-through cache used
 /// by transaction signing and execution.
@@ -22,7 +22,7 @@ pub enum ObjectReadResult {
 /// Note that except where specified below, we do not provide any durability guarantees.
 /// Crash recovery is done by re-execution of transactions when necessary.
 #[async_trait]
-pub trait ExecutionCache {
+pub trait ExecutionCache: Send + Sync {
     /// Read the inputs for a transaction that the validator was asked to sign.
     /// tx_digest is provided so that the inputs can be cached with the tx_digest and returned with
     /// a single hash map lookup when notify_read_objects_for_execution is called later.
@@ -30,8 +30,34 @@ pub trait ExecutionCache {
         &self,
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
-        timeout: Duration,
-    ) -> SuiResult<Vec<Arc<Object>>>;
+        epoch_id: EpochId,
+    ) -> SuiResult<Vec<ObjectReadResult>>;
+
+    /// Reads input objects assuming a synchronous context such as the end of epoch transaction.
+    /// By "synchronous" we mean that it is safe to read the latest version of all shared objects,
+    /// as opposed to relying on the shared input assignment.
+    async fn read_objects_for_synchronous_execution(
+        &self,
+        tx_digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+    ) -> SuiResult<Vec<ObjectReadResult>>;
+
+    async fn read_objects_for_end_of_epoch_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+    ) -> SuiResult<Vec<ObjectReadResult>> {
+        self.read_objects_for_synchronous_execution(tx_digest, objects)
+            .await
+    }
+
+    async fn read_objects_for_dry_run_exec(
+        &self,
+        objects: &[InputObjectKind],
+    ) -> SuiResult<Vec<ObjectReadResult>> {
+        self.read_objects_for_synchronous_execution(&TransactionDigest::default(), objects)
+            .await
+    }
 
     /// Attempt to acquire locks on the mutable_input_objects for the transaction.
     /// This must not be called until after ownership checks have passed.
@@ -70,8 +96,10 @@ pub trait ExecutionCache {
     /// not known at signing time).
     async fn notify_read_objects_for_execution(
         &self,
+        shared_locks: &dyn GetSharedLocks,
         tx_digest: &TransactionDigest,
-        objects: &[ObjectKey],
+        objects: &[InputObjectKind],
+        epoch_id: EpochId,
     ) -> SuiResult<Vec<ObjectReadResult>>;
 
     /// Read a child object. The version_bound is the highest version that should be observable by
@@ -93,7 +121,7 @@ pub trait ExecutionCache {
     /// soon as those transactions are observed via consensus.
     ///
     /// This is an optional method, since it's just an optimization.
-    fn prefetch_objects(&self, tx_digest: &TransactionDigest, objects: &[ObjectKey]) {}
+    fn prefetch_objects(&self, _tx_digest: &TransactionDigest, _objects: &[ObjectKey]) {}
 
     /// Write the output of a transaction.
     /// Because of the child object consistency rule (readers that observe parents must observe all
@@ -145,9 +173,11 @@ pub trait ExecutionCache {
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
-        let effects_digest = self.notify_read_effects_digest(tx_digest).await?;
-        self.read_effects(tx_digest, effects_digest)
-            .await
-            .map(|effects| effects.expect("effects must exist"))
+        let _effects_digest = self.notify_read_effects_digest(tx_digest).await?;
+        self.read_effects(tx_digest).await.map(|effects| {
+            let effects = effects.expect("effects must exist");
+            assert_eq!(effects.transaction_digest(), tx_digest);
+            effects
+        })
     }
 }

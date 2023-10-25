@@ -1,22 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use prometheus::core::{Atomic, AtomicU64};
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_storage::execution_cache::ExecutionCache;
 use sui_types::base_types::{
-    EpochId, ObjectID, ObjectRef, SequenceNumber, TransactionDigest, VersionNumber,
+    EpochId, ObjectID, ObjectRef, SequenceNumber, TransactionDigest, TransactionEffectsDigest,
+    VersionNumber,
 };
+use sui_types::effects::TransactionEffects;
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
     get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, MarkerTableQuery,
     ObjectStore, ParentSync,
 };
+use sui_types::transaction::{
+    InputObjectKind, ObjectReadResult, VerifiedSignedTransaction, VerifiedTransaction,
+};
 
+// TODO: We won't need a special purpose InMemoryObjectStore once the InMemoryCache is ready.
 #[derive(Clone)]
 pub(crate) struct InMemoryObjectStore {
     objects: Arc<HashMap<ObjectID, Object>>,
@@ -33,6 +42,78 @@ impl InMemoryObjectStore {
 
     pub(crate) fn get_num_object_reads(&self) -> u64 {
         self.num_object_reads.get()
+    }
+}
+
+#[allow(unused_variables)]
+#[async_trait]
+impl ExecutionCache for InMemoryObjectStore {
+    async fn notify_read_objects_for_signing(
+        &self,
+        tx_digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+        epoch_id: EpochId,
+    ) -> SuiResult<Vec<ObjectReadResult>> {
+        todo!()
+    }
+
+    async fn read_objects_for_synchronous_execution(
+        &self,
+        tx_digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+    ) -> SuiResult<Vec<ObjectReadResult>> {
+        todo!()
+    }
+
+    async fn lock_transaction(
+        &self,
+        signed_transaction: VerifiedSignedTransaction,
+        mutable_input_objects: &[ObjectRef],
+    ) -> SuiResult {
+        todo!()
+    }
+
+    async fn notify_read_objects_for_execution(
+        &self,
+        shared_locks: &dyn GetSharedLocks,
+        tx_digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+        epoch_id: EpochId,
+    ) -> SuiResult<Vec<ObjectReadResult>> {
+        todo!()
+    }
+
+    fn read_child_object(
+        &self,
+        tx_digest: &TransactionDigest,
+        object: &ObjectID,
+        version_bound: SequenceNumber,
+    ) -> SuiResult<Arc<Object>> {
+        todo!()
+    }
+
+    async fn write_transaction_outputs(
+        &self,
+        inner_temporary_store: InnerTemporaryStore,
+        effects: &TransactionEffects,
+        transaction: &VerifiedTransaction,
+        epoch_id: EpochId,
+    ) -> SuiResult {
+        todo!()
+    }
+
+    async fn notify_read_effects_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<TransactionEffectsDigest> {
+        todo!()
+    }
+
+    async fn read_effects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<Option<TransactionEffects>> {
+        todo!()
     }
 }
 

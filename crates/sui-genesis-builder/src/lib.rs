@@ -965,7 +965,7 @@ fn process_package(
         .filter_map(|(dependency, object)| {
             Some((
                 InputObjectKind::MovePackage(*dependency),
-                object?.to_owned(),
+                Arc::new(object?.to_owned()),
             ))
         })
         .collect();
