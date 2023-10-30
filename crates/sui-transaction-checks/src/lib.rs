@@ -419,7 +419,7 @@ mod checked {
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         let mut deleted_shared_objects = Vec::new();
         for object in objects.iter() {
-            if object.input_object_kind.is_mutable() {
+            if object.is_mutable() {
                 fp_ensure!(
                     used_objects.insert(object.id().into()),
                     UserInputError::MutableObjectUsedMoreThanOnce {
