@@ -8,7 +8,7 @@ use sui_types::{
     error::{SuiError, SuiResult, UserInputError},
     signature::GenericSignature,
     storage::BackingPackageStore,
-    transaction::{Command, ObjectReadResult, TransactionData, TransactionDataAPI},
+    transaction::{Command, InputObjects, ObjectReadResult, TransactionData, TransactionDataAPI},
 };
 macro_rules! deny_if_true {
     ($cond:expr, $msg:expr) => {
@@ -27,7 +27,7 @@ macro_rules! deny_if_true {
 pub fn check_transaction_for_signing(
     tx_data: &TransactionData,
     tx_signatures: &[GenericSignature],
-    input_objects: &[ObjectReadResult],
+    input_objects: &InputObjects,
     receiving_objects: &[ObjectRef],
     filter_config: &TransactionDenyConfig,
     package_store: &impl BackingPackageStore,
@@ -126,7 +126,7 @@ fn check_signers(filter_config: &TransactionDenyConfig, tx_data: &TransactionDat
 
 fn check_input_objects(
     filter_config: &TransactionDenyConfig,
-    input_objects: &[ObjectReadResult],
+    input_objects: &InputObjects,
 ) -> SuiResult {
     let deny_map = filter_config.get_object_deny_set();
     let shared_object_disabled = filter_config.shared_object_disabled();
@@ -136,7 +136,7 @@ fn check_input_objects(
     }
     for ObjectReadResult {
         input_object_kind, ..
-    } in input_objects
+    } in input_objects.iter()
     {
         let id = input_object_kind.object_id();
         deny_if_true!(

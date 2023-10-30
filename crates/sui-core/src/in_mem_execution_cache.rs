@@ -19,8 +19,8 @@ use sui_types::{
     object::Object,
     storage::{GetSharedLocks, ObjectKey, ObjectStore},
     transaction::{
-        InputObjectKind, ObjectReadResult, ObjectReadResultKind, VerifiedSignedTransaction,
-        VerifiedTransaction,
+        InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
+        VerifiedSignedTransaction, VerifiedTransaction,
     },
 };
 
@@ -60,7 +60,7 @@ impl ExecutionCache for InMemoryCache {
         tx_digest: &TransactionDigest,
         input_object_kinds: &[InputObjectKind],
         epoch_id: EpochId,
-    ) -> SuiResult<Vec<ObjectReadResult>> {
+    ) -> SuiResult<InputObjects> {
         let mut object_keys = Vec::with_capacity(input_object_kinds.len());
         let mut fetch_indices = Vec::with_capacity(input_object_kinds.len());
         let mut missing_shared_objects = Vec::new();
@@ -114,14 +114,14 @@ impl ExecutionCache for InMemoryCache {
             }
         }
 
-        Ok(results.into_iter().map(Option::unwrap).collect())
+        Ok(results.into_iter().map(Option::unwrap).collect().into())
     }
 
     async fn read_objects_for_synchronous_execution(
         &self,
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
-    ) -> SuiResult<Vec<ObjectReadResult>> {
+    ) -> SuiResult<InputObjects> {
         let mut results = Vec::with_capacity(objects.len());
         for kind in objects {
             let obj = match kind {
@@ -135,7 +135,7 @@ impl ExecutionCache for InMemoryCache {
             .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
             results.push(ObjectReadResult::new(*kind, obj.into()));
         }
-        Ok(results)
+        Ok(results.into())
     }
 
     async fn lock_transaction(
@@ -152,7 +152,7 @@ impl ExecutionCache for InMemoryCache {
         tx_digest: &TransactionDigest,
         input_object_kinds: &[InputObjectKind],
         epoch_id: EpochId,
-    ) -> SuiResult<Vec<ObjectReadResult>> {
+    ) -> SuiResult<InputObjects> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
         let mut object_keys = Vec::with_capacity(input_object_kinds.len());
@@ -211,7 +211,7 @@ impl ExecutionCache for InMemoryCache {
                 (None, InputObjectKind::SharedMoveObject { id, initial_shared_version, mutable }) => {
                     // If the object was deleted by a concurrently certified tx then return this separately
                     let version = key.1;
-                    if let Some(dependency) = self.store.get_deleted_shared_object_previous_tx_digest(id, &version, epoch_id)? {
+                    if let Some(dependency) = self.store.get_deleted_shared_object_previous_tx_digest(&id, &version, epoch_id)? {
                         ObjectReadResult {
                             input_object_kind: *input,
                             object: ObjectReadResultKind::DeletedSharedObject(version, dependency),
@@ -224,7 +224,7 @@ impl ExecutionCache for InMemoryCache {
             });
         }
 
-        Ok(result)
+        Ok(result.into())
     }
 
     fn read_child_object(

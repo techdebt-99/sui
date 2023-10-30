@@ -30,7 +30,8 @@ use sui_types::{
         ParentSync,
     },
     transaction::{
-        InputObjectKind, ObjectReadResult, VerifiedSignedTransaction, VerifiedTransaction,
+        InputObjectKind, InputObjects, ObjectReadResult, VerifiedSignedTransaction,
+        VerifiedTransaction,
     },
 };
 
@@ -444,7 +445,7 @@ impl ExecutionCache for InMemoryStore {
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_id: EpochId,
-    ) -> SuiResult<Vec<ObjectReadResult>> {
+    ) -> SuiResult<InputObjects> {
         todo!()
     }
 
@@ -452,20 +453,24 @@ impl ExecutionCache for InMemoryStore {
         &self,
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
-    ) -> SuiResult<Vec<ObjectReadResult>> {
-        Ok(objects
-            .iter()
-            .map(|input_kind| {
-                let obj = match input_kind {
-                    InputObjectKind::MovePackage(id) => self.get_object(id).unwrap(),
-                    InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                        self.get_object_at_version(&objref.0, objref.1).unwrap()
-                    }
-                    InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id).unwrap(),
-                };
-                ObjectReadResult::new(*input_kind, obj.clone().into())
-            })
-            .collect())
+    ) -> SuiResult<InputObjects> {
+        Ok(InputObjects::new(
+            objects
+                .iter()
+                .map(|input_kind| {
+                    let obj = match input_kind {
+                        InputObjectKind::MovePackage(id) => self.get_object(id).unwrap(),
+                        InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                            self.get_object_at_version(&objref.0, objref.1).unwrap()
+                        }
+                        InputObjectKind::SharedMoveObject { id, .. } => {
+                            self.get_object(id).unwrap()
+                        }
+                    };
+                    ObjectReadResult::new(*input_kind, obj.clone().into())
+                })
+                .collect(),
+        ))
     }
 
     async fn lock_transaction(
@@ -482,7 +487,7 @@ impl ExecutionCache for InMemoryStore {
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_id: EpochId,
-    ) -> SuiResult<Vec<ObjectReadResult>> {
+    ) -> SuiResult<InputObjects> {
         todo!()
     }
 

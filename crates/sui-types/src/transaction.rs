@@ -2564,6 +2564,12 @@ pub struct InputObjects {
     //deleted: DeletedSharedObjects,
 }
 
+impl From<Vec<ObjectReadResult>> for InputObjects {
+    fn from(objects: Vec<ObjectReadResult>) -> Self {
+        Self::new(objects)
+    }
+}
+
 impl InputObjects {
     pub fn new(
         objects: Vec<ObjectReadResult>,
@@ -2710,6 +2716,14 @@ impl InputObjects {
                 }
             })
             .collect()
+    }
+
+    pub fn push(&mut self, object: ObjectReadResult) {
+        self.objects.push(object);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &ObjectReadResult> {
+        self.objects.iter()
     }
 }
 

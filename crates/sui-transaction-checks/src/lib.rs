@@ -42,7 +42,7 @@ mod checked {
     // On success the gas part of the transaction (gas data and gas coins)
     // is verified and good to go
     pub fn get_gas_status(
-        objects: &[ObjectReadResult],
+        objects: &InputObjects,
         gas: &[ObjectRef],
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
@@ -94,7 +94,7 @@ mod checked {
             reference_gas_price,
             transaction,
         )?;
-        let input_objects = check_objects(transaction, input_objects)?;
+        check_objects(transaction, input_objects)?;
         check_receiving_objects(
             store,
             &receiving_objects,
@@ -133,7 +133,7 @@ mod checked {
             reference_gas_price,
             transaction,
         )?;
-        let input_objects = check_objects(transaction, &input_objects)?;
+        check_objects(transaction, &input_objects)?;
         check_receiving_objects(
             store,
             &receiving_objects,
@@ -212,19 +212,14 @@ mod checked {
                     .into()
                 );
             }
-
-            input_objects_out.push((input_object.input_object_kind, object.clone()));
         }
 
-        input_objects_out.push((
+        input_objects.push(ObjectReadResult::new(
             InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref),
-            Arc::new(gas_object),
+            gas_object.into(),
         ));
 
-        Ok((
-            gas_object_ref,
-            InputObjects::new(input_objects_out, Vec::new()),
-        ))
+        Ok(gas_object_ref)
     }
 
     fn check_receiving_objects<S: ObjectStore + MarkerTableQuery>(
@@ -358,7 +353,7 @@ mod checked {
     }
 
     pub fn check_input_objects(
-        objects: &[ObjectReadResult],
+        objects: &InputObjects,
         protocol_config: &ProtocolConfig,
     ) -> SuiResult {
         fp_ensure!(
@@ -377,7 +372,7 @@ mod checked {
     /// Return the gas status to be used for the lifecycle of the transaction.
     #[instrument(level = "trace", skip_all)]
     fn check_gas(
-        objects: &[ObjectReadResult],
+        objects: &InputObjects,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         gas: &[ObjectRef],
@@ -429,10 +424,11 @@ mod checked {
             }
         }
 
-        // Gather all objects and errors.
-        let mut all_objects = Vec::with_capacity(objects.len());
+        if !transaction.is_genesis_tx() && objects.is_empty() {
+            return Err(UserInputError::ObjectInputArityViolation);
+        }
 
-        for object in objects {
+        for object in objects.iter() {
             let input_object_kind = object.input_object_kind;
 
             match &object.object {
@@ -457,7 +453,6 @@ mod checked {
                         object,
                         system_transaction,
                     )?;
-                    all_objects.push((input_object_kind, object.clone()));
                 }
                 // We skip checking a deleted shared object because it no longer exists
                 ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
@@ -471,11 +466,8 @@ mod checked {
                 }
             }
         }
-        if !transaction.is_genesis_tx() && all_objects.is_empty() {
-            return Err(UserInputError::ObjectInputArityViolation);
-        }
 
-        Ok(InputObjects::new(all_objects, deleted_shared_objects))
+        Ok(())
     }
 
     /// Check one object against a reference

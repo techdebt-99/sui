@@ -11,9 +11,7 @@ use sui_types::{
     inner_temporary_store::InnerTemporaryStore,
     object::Object,
     storage::{GetSharedLocks, ObjectKey},
-    transaction::{
-        InputObjectKind, ObjectReadResult, VerifiedSignedTransaction, VerifiedTransaction,
-    },
+    transaction::{InputObjectKind, InputObjects, VerifiedSignedTransaction, VerifiedTransaction},
 };
 
 /// ExecutionCache is intended to provide an in-memory, write-behind or write-through cache used
@@ -31,7 +29,7 @@ pub trait ExecutionCache: Send + Sync {
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_id: EpochId,
-    ) -> SuiResult<Vec<ObjectReadResult>>;
+    ) -> SuiResult<InputObjects>;
 
     /// Reads input objects assuming a synchronous context such as the end of epoch transaction.
     /// By "synchronous" we mean that it is safe to read the latest version of all shared objects,
@@ -40,13 +38,13 @@ pub trait ExecutionCache: Send + Sync {
         &self,
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
-    ) -> SuiResult<Vec<ObjectReadResult>>;
+    ) -> SuiResult<InputObjects>;
 
     async fn read_objects_for_end_of_epoch_transaction(
         &self,
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
-    ) -> SuiResult<Vec<ObjectReadResult>> {
+    ) -> SuiResult<InputObjects> {
         self.read_objects_for_synchronous_execution(tx_digest, objects)
             .await
     }
@@ -54,7 +52,7 @@ pub trait ExecutionCache: Send + Sync {
     async fn read_objects_for_dry_run_exec(
         &self,
         objects: &[InputObjectKind],
-    ) -> SuiResult<Vec<ObjectReadResult>> {
+    ) -> SuiResult<InputObjects> {
         self.read_objects_for_synchronous_execution(&TransactionDigest::default(), objects)
             .await
     }
@@ -100,7 +98,7 @@ pub trait ExecutionCache: Send + Sync {
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_id: EpochId,
-    ) -> SuiResult<Vec<ObjectReadResult>>;
+    ) -> SuiResult<InputObjects>;
 
     /// Read a child object. The version_bound is the highest version that should be observable by
     /// this reader. It must be derived from the root-owner's version by the runtime.
