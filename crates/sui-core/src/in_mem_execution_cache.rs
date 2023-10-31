@@ -215,7 +215,7 @@ impl ExecutionCache for InMemoryCache {
                 (None, InputObjectKind::SharedMoveObject { id, initial_shared_version, mutable }) => {
                     // If the object was deleted by a concurrently certified tx then return this separately
                     let version = key.1;
-                    if let Some(dependency) = self.store.get_deleted_shared_object_previous_tx_digest(&id, &version, epoch_id)? {
+                    if let Some(dependency) = self.store.get_deleted_shared_object_previous_tx_digest(id, &version, epoch_id)? {
                         ObjectReadResult {
                             input_object_kind: *input,
                             object: ObjectReadResultKind::DeletedSharedObject(version, dependency),

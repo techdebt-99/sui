@@ -422,7 +422,7 @@ impl AuthorityStore {
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> Result<Option<(SequenceNumber, TransactionDigest)>, TypedStoreError> {
+    ) -> SuiResult<Option<(SequenceNumber, TransactionDigest)>> {
         let object_key = ObjectKey::max_for_id(object_id);
         let marker_key = (epoch_id, object_key);
 
