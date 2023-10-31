@@ -1561,22 +1561,6 @@ impl AuthorityState {
             Owner::AddressOwner(sender),
             TransactionDigest::genesis(),
         );
-<<<<<<< HEAD
-        let (gas_object_ref, input_objects) = sui_transaction_checks::check_dev_inspect_input(
-            &self.database,
-            protocol_config,
-            &transaction_kind,
-            gas_object,
-            epoch_store.epoch(),
-        )?;
-||||||| parent of c624c21e15 (wip)
-        let (gas_object_ref, input_objects) = sui_transaction_checks::check_dev_inspect_input(
-            &self.database,
-            protocol_config,
-            &transaction_kind,
-            gas_object,
-        )?;
-=======
 
         let input_object_kinds = transaction_kind.input_objects()?;
         let input_objects = self
@@ -1590,7 +1574,6 @@ impl AuthorityState {
                 input_objects,
                 gas_object,
             )?;
->>>>>>> c624c21e15 (wip)
 
         let gas_budget = max_tx_gas;
         let data = TransactionData::new(
