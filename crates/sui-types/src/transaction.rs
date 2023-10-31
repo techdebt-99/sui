@@ -2738,13 +2738,7 @@ impl InputObjects {
     pub fn into_object_map(self) -> BTreeMap<ObjectID, Arc<Object>> {
         self.objects
             .into_iter()
-            .filter_map(|o| {
-                if let Some(object) = o.as_object() {
-                    Some((o.id(), object.clone()))
-                } else {
-                    None
-                }
-            })
+            .filter_map(|o| o.as_object().map(|object| (o.id(), object.clone())))
             .collect()
     }
 
