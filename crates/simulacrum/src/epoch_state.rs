@@ -95,11 +95,22 @@ impl EpochState {
         Result<(), sui_types::error::ExecutionError>,
     )> {
         let tx_digest = *transaction.digest();
-        let input_object_kinds = transaction.data().intent_message().value.input_objects()?;
+        let tx_data = &transaction.data().intent_message().value;
+        let input_object_kinds = tx_data.input_objects()?;
+        let receiving_objects = tx_data.receiving_objects();
         let input_objects = store
             .read_objects_for_synchronous_execution(&tx_digest, &input_object_kinds)
             .now_or_never()
             .expect("simulacrum store must be synchronous")?;
+
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            tx_data,
+            transaction.tx_signatures(),
+            &input_object_kinds,
+            &receiving_objects,
+            deny_config,
+            store,
+        )?;
 
         // Run the transaction input checks that would run when submitting the txn to a validator
         // for signing
@@ -110,8 +121,6 @@ impl EpochState {
             self.epoch(),
             transaction.data().transaction_data(),
             input_objects,
-            transaction.tx_signatures(),
-            deny_config,
             &self.bytecode_verifier_metrics,
         )?;
 

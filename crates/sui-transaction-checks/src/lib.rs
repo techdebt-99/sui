@@ -9,14 +9,12 @@ pub use checked::*;
 mod checked {
     use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
-    use sui_config::transaction_deny_config::TransactionDenyConfig;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::ObjectRef;
     use sui_types::committee::EpochId;
     use sui_types::error::{UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
-    use sui_types::signature::GenericSignature;
     use sui_types::storage::BackingPackageStore;
     use sui_types::storage::MarkerTableQuery;
     use sui_types::storage::ObjectStore;
@@ -77,22 +75,11 @@ mod checked {
         epoch_id: EpochId,
         transaction: &TransactionData,
         input_objects: InputObjects,
-        tx_signatures: &[GenericSignature],
-        transaction_deny_config: &TransactionDenyConfig,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check(protocol_config)?;
         let receiving_objects = transaction.receiving_objects();
-        crate::deny::check_transaction_for_signing(
-            transaction,
-            tx_signatures,
-            &input_objects,
-            &receiving_objects,
-            transaction_deny_config,
-            &store,
-        )?;
-
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
 

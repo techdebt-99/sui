@@ -8,7 +8,7 @@ use sui_types::{
     error::{SuiError, SuiResult, UserInputError},
     signature::GenericSignature,
     storage::BackingPackageStore,
-    transaction::{Command, InputObjects, ObjectReadResult, TransactionData, TransactionDataAPI},
+    transaction::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
 };
 macro_rules! deny_if_true {
     ($cond:expr, $msg:expr) => {
@@ -27,7 +27,7 @@ macro_rules! deny_if_true {
 pub fn check_transaction_for_signing(
     tx_data: &TransactionData,
     tx_signatures: &[GenericSignature],
-    input_objects: &InputObjects,
+    input_object_kinds: &[InputObjectKind],
     receiving_objects: &[ObjectRef],
     filter_config: &TransactionDenyConfig,
     package_store: &impl BackingPackageStore,
@@ -36,7 +36,7 @@ pub fn check_transaction_for_signing(
 
     check_signers(filter_config, tx_data)?;
 
-    check_input_objects(filter_config, input_objects)?;
+    check_input_objects(filter_config, input_object_kinds)?;
 
     check_package_dependencies(filter_config, tx_data, package_store)?;
 
@@ -126,7 +126,7 @@ fn check_signers(filter_config: &TransactionDenyConfig, tx_data: &TransactionDat
 
 fn check_input_objects(
     filter_config: &TransactionDenyConfig,
-    input_objects: &InputObjects,
+    input_object_kinds: &[InputObjectKind],
 ) -> SuiResult {
     let deny_map = filter_config.get_object_deny_set();
     let shared_object_disabled = filter_config.shared_object_disabled();
@@ -134,10 +134,7 @@ fn check_input_objects(
         // No need to iterate through the input objects if no relevant policy is set.
         return Ok(());
     }
-    for ObjectReadResult {
-        input_object_kind, ..
-    } in input_objects.iter()
-    {
+    for input_object_kind in input_object_kinds {
         let id = input_object_kind.object_id();
         deny_if_true!(
             deny_map.contains(&id),

@@ -711,7 +711,20 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
         let tx_digest = transaction.digest();
-        let input_object_kinds = transaction.data().intent_message().value.input_objects()?;
+        let tx_data = &transaction.data().intent_message().value;
+
+        let input_object_kinds = tx_data.input_objects()?;
+        let receiving_objects = tx_data.receiving_objects();
+
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            tx_data,
+            transaction.tx_signatures(),
+            &input_object_kinds,
+            &receiving_objects,
+            &self.transaction_deny_config,
+            &self.database,
+        )?;
+
         let input_objects = self
             .cache
             .notify_read_objects_for_signing(tx_digest, &input_object_kinds, epoch_store.epoch())
@@ -724,8 +737,6 @@ impl AuthorityState {
             epoch_store.epoch(),
             transaction.data().transaction_data(),
             input_objects,
-            transaction.tx_signatures(),
-            &self.transaction_deny_config,
             &self.metrics.bytecode_verifier_metrics,
         )?;
 
@@ -1381,6 +1392,17 @@ impl AuthorityState {
         }
 
         let input_object_kinds = transaction.input_objects()?;
+        let receiving_objects = transaction.receiving_objects();
+
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            &transaction,
+            &[],
+            &input_object_kinds,
+            &receiving_objects,
+            &self.transaction_deny_config,
+            &self.database,
+        )?;
+
         let input_objects = self
             .cache
             .read_objects_for_dry_run_exec(&input_object_kinds)
@@ -1424,8 +1446,6 @@ impl AuthorityState {
                     epoch_store.epoch(),
                     &transaction,
                     input_objects,
-                    &[],
-                    &self.transaction_deny_config,
                     &self.metrics.bytecode_verifier_metrics,
                 )?,
                 None,

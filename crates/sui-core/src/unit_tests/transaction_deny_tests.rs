@@ -27,22 +27,29 @@ use sui_types::transaction::{
     VerifiedTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::utils::{
-    make_zklogin_tx, to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
+    get_zklogin_user_address, make_zklogin_tx, to_sender_signed_transaction,
+    to_sender_signed_transaction_with_multi_signers,
 };
 
 const ACCOUNT_NUM: usize = 5;
 const GAS_OBJECT_COUNT: usize = 15;
 
 async fn setup_test(deny_config: TransactionDenyConfig) -> (NetworkConfig, Arc<AuthorityState>) {
+    let mut accounts = vec![
+        AccountConfig {
+            address: None,
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
+        };
+        ACCOUNT_NUM
+    ];
+    accounts.push(AccountConfig {
+        address: Some(get_zklogin_user_address()),
+        gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
+    });
+
     let network_config =
         sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-            .with_accounts(vec![
-                AccountConfig {
-                    address: None,
-                    gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
-                };
-                ACCOUNT_NUM
-            ])
+            .with_accounts(accounts)
             .build();
     let state = TestAuthorityBuilder::new()
         .with_transaction_deny_config(deny_config)
@@ -160,12 +167,16 @@ async fn handle_move_call_transaction(
 }
 
 fn assert_denied<T: std::fmt::Debug>(result: &SuiResult<T>) {
-    assert!(matches!(
-        result.as_ref().unwrap_err(),
-        SuiError::UserInputError {
-            error: UserInputError::TransactionDenied { .. }
-        }
-    ));
+    assert!(
+        matches!(
+            result.as_ref().unwrap_err(),
+            SuiError::UserInputError {
+                error: UserInputError::TransactionDenied { .. }
+            }
+        ),
+        "{:?}",
+        result
+    );
 }
 
 #[tokio::test]
