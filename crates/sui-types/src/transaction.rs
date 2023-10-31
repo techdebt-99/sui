@@ -2564,6 +2564,39 @@ pub struct InputObjects {
     //deleted: DeletedSharedObjects,
 }
 
+// An InputObjects that has been verified by sui-transaction-checks, and can be safely passed to
+// execution.
+pub struct CheckedInputObjects(InputObjects);
+
+impl CheckedInputObjects {
+    // DO NOT CALL outside of sui-transaction-checks.
+    //
+    // CheckedInputObjects should really be defined in sui-transaction-checks so that we can
+    // make public construction impossible. But we can't do that because it would result in circular
+    // dependencies.
+    pub fn new_with_checked_transaction_inputs(inputs: InputObjects) -> Self {
+        Self(inputs)
+    }
+
+    // Only call when building the genesis transaction
+    pub fn new_for_genesis(input_objects: Vec<ObjectReadResult>) -> Self {
+        Self(InputObjects::new(input_objects))
+    }
+
+    // Only call from the replay tool.
+    pub fn new_for_replay(input_objects: InputObjects) -> Self {
+        Self(input_objects)
+    }
+
+    pub fn inner(&self) -> &InputObjects {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> InputObjects {
+        self.0
+    }
+}
+
 impl From<Vec<ObjectReadResult>> for InputObjects {
     fn from(objects: Vec<ObjectReadResult>) -> Self {
         Self::new(objects)
@@ -2571,10 +2604,7 @@ impl From<Vec<ObjectReadResult>> for InputObjects {
 }
 
 impl InputObjects {
-    pub fn new(
-        objects: Vec<ObjectReadResult>,
-        //deleted: DeletedSharedObjects,
-    ) -> Self {
+    pub fn new(objects: Vec<ObjectReadResult>) -> Self {
         Self { objects }
     }
 

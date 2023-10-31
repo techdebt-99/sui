@@ -22,7 +22,7 @@ use sui_types::storage::{
     ObjectStore, ParentSync,
 };
 use sui_types::transaction::{
-    InputObjectKind, ObjectReadResult, VerifiedSignedTransaction, VerifiedTransaction,
+    InputObjectKind, InputObjects, ObjectReadResult, VerifiedSignedTransaction, VerifiedTransaction,
 };
 
 // TODO: We won't need a special purpose InMemoryObjectStore once the InMemoryCache is ready.
@@ -53,7 +53,7 @@ impl ExecutionCache for InMemoryObjectStore {
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_id: EpochId,
-    ) -> SuiResult<Vec<ObjectReadResult>> {
+    ) -> SuiResult<InputObjects> {
         todo!()
     }
 
@@ -61,7 +61,7 @@ impl ExecutionCache for InMemoryObjectStore {
         &self,
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
-    ) -> SuiResult<Vec<ObjectReadResult>> {
+    ) -> SuiResult<InputObjects> {
         todo!()
     }
 
@@ -79,8 +79,23 @@ impl ExecutionCache for InMemoryObjectStore {
         tx_digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_id: EpochId,
-    ) -> SuiResult<Vec<ObjectReadResult>> {
-        todo!()
+    ) -> SuiResult<InputObjects> {
+        Ok(objects
+            .iter()
+            .map(|kind| {
+                let object = match kind {
+                    InputObjectKind::MovePackage(id) => self.get_package_object(id),
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                        self.get_object_by_key(&objref.0, objref.1)
+                    }
+                    InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id),
+                }
+                .expect("must succeed")
+                .expect("object must be present");
+                ObjectReadResult::new(*kind, object.into())
+            })
+            .collect::<Vec<_>>()
+            .into())
     }
 
     fn read_child_object(

@@ -114,7 +114,11 @@ impl ExecutionCache for InMemoryCache {
             }
         }
 
-        Ok(results.into_iter().map(Option::unwrap).collect().into())
+        Ok(results
+            .into_iter()
+            .map(Option::unwrap)
+            .collect::<Vec<_>>()
+            .into())
     }
 
     async fn read_objects_for_synchronous_execution(

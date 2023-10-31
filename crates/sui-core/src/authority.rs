@@ -723,13 +723,13 @@ impl AuthorityState {
             epoch_store.reference_gas_price(),
             epoch_store.epoch(),
             transaction.data().transaction_data(),
-            &input_objects,
+            input_objects,
             transaction.tx_signatures(),
             &self.transaction_deny_config,
             &self.metrics.bytecode_verifier_metrics,
         )?;
 
-        let owned_objects = checked_input_objects.filter_owned_objects();
+        let owned_objects = checked_input_objects.inner().filter_owned_objects();
 
         let signed_transaction = VerifiedSignedTransaction::new(
             epoch_store.epoch(),
@@ -961,7 +961,7 @@ impl AuthorityState {
         self.process_certificate(
             tx_guard,
             certificate,
-            &input_objects,
+            input_objects,
             expected_effects_digest,
             epoch_store,
         )
@@ -1043,7 +1043,7 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard,
         certificate: &VerifiedExecutableTransaction,
-        input_objects: &InputObjects,
+        input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
@@ -1307,7 +1307,7 @@ impl AuthorityState {
         &self,
         _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
-        input_objects: &InputObjects,
+        input_objects: InputObjects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(
         InnerTemporaryStore,
@@ -1325,7 +1325,7 @@ impl AuthorityState {
             epoch_store.reference_gas_price(),
         )?;
 
-        let owned_object_refs = input_objects.filter_owned_objects();
+        let owned_object_refs = input_objects.inner().filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
@@ -1409,7 +1409,7 @@ impl AuthorityState {
                     epoch_store.reference_gas_price(),
                     epoch_store.epoch(),
                     &transaction,
-                    &input_objects,
+                    input_objects,
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
                 )?,
@@ -1423,7 +1423,7 @@ impl AuthorityState {
                     epoch_store.reference_gas_price(),
                     epoch_store.epoch(),
                     &transaction,
-                    &input_objects,
+                    input_objects,
                     &[],
                     &self.transaction_deny_config,
                     &self.metrics.bytecode_verifier_metrics,
@@ -1587,7 +1587,7 @@ impl AuthorityState {
             sui_transaction_checks::check_dev_inspect_input(
                 protocol_config,
                 &transaction_kind,
-                &input_objects,
+                input_objects,
                 gas_object,
             )?;
 >>>>>>> c624c21e15 (wip)
@@ -4203,12 +4203,7 @@ impl AuthorityState {
             .await?;
 
         let (temporary_store, effects, _execution_error_opt) = self
-            .prepare_certificate(
-                &execution_guard,
-                &executable_tx,
-                &input_objects,
-                epoch_store,
-            )
+            .prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)
             .await?;
         let system_obj = get_sui_system_state(&temporary_store.written)
             .expect("change epoch tx must write to system object");

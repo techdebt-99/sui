@@ -21,8 +21,8 @@ mod checked {
     use sui_types::storage::MarkerTableQuery;
     use sui_types::storage::ObjectStore;
     use sui_types::transaction::{
-        InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind, TransactionData,
-        TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
+        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
+        TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -36,6 +36,16 @@ mod checked {
     };
     use tracing::error;
     use tracing::instrument;
+
+    trait IntoChecked {
+        fn into_checked(self) -> CheckedInputObjects;
+    }
+
+    impl IntoChecked for InputObjects {
+        fn into_checked(self) -> CheckedInputObjects {
+            CheckedInputObjects::new_with_checked_transaction_inputs(self)
+        }
+    }
 
     // Entry point for all checks related to gas.
     // Called on both signing and execution.
@@ -66,18 +76,18 @@ mod checked {
         reference_gas_price: u64,
         epoch_id: EpochId,
         transaction: &TransactionData,
-        input_objects: &[ObjectReadResult],
+        input_objects: InputObjects,
         tx_signatures: &[GenericSignature],
         transaction_deny_config: &TransactionDenyConfig,
         metrics: &Arc<BytecodeVerifierMetrics>,
-    ) -> SuiResult<(SuiGasStatus, InputObjects)> {
+    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check(protocol_config)?;
         let receiving_objects = transaction.receiving_objects();
         crate::deny::check_transaction_for_signing(
             transaction,
             tx_signatures,
-            input_objects,
+            &input_objects,
             &receiving_objects,
             transaction_deny_config,
             &store,
@@ -86,15 +96,15 @@ mod checked {
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
 
-        check_input_objects(input_objects, protocol_config)?;
+        check_input_objects(&input_objects, protocol_config)?;
         let gas_status = get_gas_status(
-            input_objects,
+            &input_objects,
             transaction.gas(),
             protocol_config,
             reference_gas_price,
             transaction,
         )?;
-        check_objects(transaction, input_objects)?;
+        check_objects(transaction, &input_objects)?;
         check_receiving_objects(
             store,
             &receiving_objects,
@@ -102,7 +112,7 @@ mod checked {
             protocol_config,
             epoch_id,
         )?;
-        Ok((gas_status, input_objects))
+        Ok((gas_status, input_objects.into_checked()))
     }
 
     pub fn check_transaction_input_with_given_gas<S: ObjectStore + MarkerTableQuery>(
@@ -111,16 +121,14 @@ mod checked {
         reference_gas_price: u64,
         epoch_id: EpochId,
         transaction: &TransactionData,
-        input_objects: &[ObjectReadResult],
+        mut input_objects: InputObjects,
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
-    ) -> SuiResult<(SuiGasStatus, InputObjects)> {
+    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check_no_gas_check(protocol_config)?;
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
         let receiving_objects = transaction.receiving_objects();
-        //let mut input_objects = transaction.input_objects()?;
-        let mut input_objects = input_objects.to_vec();
         check_input_objects(&input_objects, protocol_config)?;
 
         let gas_object_ref = gas_object.compute_object_reference();
@@ -141,16 +149,16 @@ mod checked {
             protocol_config,
             epoch_id,
         )?;
-        Ok((gas_status, input_objects))
+        Ok((gas_status, input_objects.into_checked()))
     }
 
     #[instrument(level = "trace", skip_all)]
     pub fn check_certificate_input(
         cert: &VerifiedExecutableTransaction,
-        input_objects: &[ObjectReadResult],
+        input_objects: InputObjects,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
-    ) -> SuiResult<(SuiGasStatus, InputObjects)> {
+    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         // This should not happen - validators should not have signed the txn in the first place.
         assert!(
             cert.data()
@@ -163,17 +171,17 @@ mod checked {
 
         let tx_data = &cert.data().intent_message().value;
 
-        check_input_objects(input_objects, protocol_config)?;
+        check_input_objects(&input_objects, protocol_config)?;
         let gas_status = get_gas_status(
-            input_objects,
+            &input_objects,
             tx_data.gas(),
             protocol_config,
             reference_gas_price,
             tx_data,
         )?;
-        let input_objects = check_objects(tx_data, input_objects)?;
+        check_objects(tx_data, &input_objects)?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
-        Ok((gas_status, input_objects))
+        Ok((gas_status, input_objects.into_checked()))
     }
 
     /// WARNING! This should only be used for the dev-inspect transaction. This transaction type
@@ -181,10 +189,9 @@ mod checked {
     pub fn check_dev_inspect_input(
         config: &ProtocolConfig,
         kind: &TransactionKind,
-        input_objects: &[ObjectReadResult],
+        mut input_objects: InputObjects,
         gas_object: Object,
-        epoch_id: EpochId,
-    ) -> SuiResult<(ObjectRef, InputObjects)> {
+    ) -> SuiResult<(ObjectRef, CheckedInputObjects)> {
         let gas_object_ref = gas_object.compute_object_reference();
         kind.validity_check(config)?;
         if kind.is_system_tx() {
@@ -194,9 +201,8 @@ mod checked {
             ))
             .into());
         }
-        check_input_objects(input_objects, config)?;
+        check_input_objects(&input_objects, config)?;
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
-        let mut input_objects_out = Vec::new();
         for input_object in input_objects.iter() {
             let Some(object) = input_object.as_object() else {
                 // object was deleted
@@ -219,7 +225,7 @@ mod checked {
             gas_object.into(),
         ));
 
-        Ok(gas_object_ref)
+        Ok((gas_object_ref, input_objects.into_checked()))
     }
 
     fn check_receiving_objects<S: ObjectStore + MarkerTableQuery>(
@@ -406,10 +412,7 @@ mod checked {
     /// Check all the objects used in the transaction against the database, and ensure
     /// that they are all the correct version and number.
     #[instrument(level = "trace", skip_all)]
-    pub fn check_objects(
-        transaction: &TransactionData,
-        objects: &[ObjectReadResult],
-    ) -> UserInputResult<InputObjects> {
+    fn check_objects(transaction: &TransactionData, objects: &InputObjects) -> UserInputResult<()> {
         // We require that mutable objects cannot show up more than once.
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         let mut deleted_shared_objects = Vec::new();

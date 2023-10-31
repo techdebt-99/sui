@@ -191,7 +191,7 @@ impl SingleValidator {
         );
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
             &executable,
-            &objects,
+            objects,
             self.epoch_store.protocol_config(),
             self.epoch_store.reference_gas_price(),
         )

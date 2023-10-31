@@ -109,7 +109,7 @@ impl EpochState {
             self.epoch_start_state.reference_gas_price(),
             self.epoch(),
             transaction.data().transaction_data(),
-            &input_objects,
+            input_objects,
             transaction.tx_signatures(),
             deny_config,
             &self.bytecode_verifier_metrics,
