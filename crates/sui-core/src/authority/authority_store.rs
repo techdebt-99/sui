@@ -7,7 +7,6 @@ use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
-use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
 use move_core_types::resolver::ModuleResolver;
@@ -204,7 +203,7 @@ impl AuthorityStore {
         }
     }
 
-    pub async fn open_with_committee_for_testing(
+    pub(crate) async fn open_with_committee_for_testing(
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: &Committee,
         genesis: &Genesis,
@@ -288,7 +287,7 @@ impl AuthorityStore {
         Ok(store)
     }
 
-    pub fn get_root_state_hash(&self, epoch: EpochId) -> SuiResult<ECMHLiveObjectSetDigest> {
+    pub(crate) fn get_root_state_hash(&self, epoch: EpochId) -> SuiResult<ECMHLiveObjectSetDigest> {
         let acc = self
             .perpetual_tables
             .root_state_hash_by_epoch
@@ -297,7 +296,7 @@ impl AuthorityStore {
         Ok(acc.1.digest().into())
     }
 
-    pub fn get_root_state_accumulator(
+    pub(crate) fn get_root_state_accumulator(
         &self,
         epoch: EpochId,
     ) -> (CheckpointSequenceNumber, Accumulator) {
@@ -310,21 +309,6 @@ impl AuthorityStore {
 
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         self.perpetual_tables.get_recovery_epoch_at_restart()
-    }
-
-    pub fn get_effects(
-        &self,
-        effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult<Option<TransactionEffects>> {
-        Ok(self.perpetual_tables.effects.get(effects_digest)?)
-    }
-
-    /// Returns true if we have an effects structure for this transaction digest
-    pub fn effects_exists(&self, effects_digest: &TransactionEffectsDigest) -> SuiResult<bool> {
-        self.perpetual_tables
-            .effects
-            .contains_key(effects_digest)
-            .map_err(|e| e.into())
     }
 
     pub(crate) fn get_events(
@@ -350,14 +334,14 @@ impl AuthorityStore {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
-    pub fn multi_get_effects<'a>(
+    pub(crate) fn multi_get_effects<'a>(
         &self,
         effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(self.perpetual_tables.effects.multi_get(effects_digests)?)
     }
 
-    pub fn get_executed_effects(
+    pub(crate) fn get_executed_effects(
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionEffects>> {
@@ -370,7 +354,7 @@ impl AuthorityStore {
 
     /// Given a list of transaction digests, returns a list of the corresponding effects only if they have been
     /// executed. For transactions that have not been executed, None is returned.
-    pub fn multi_get_executed_effects_digests(
+    pub(crate) fn multi_get_executed_effects_digests(
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
@@ -396,14 +380,14 @@ impl AuthorityStore {
             .collect())
     }
 
-    pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
+    pub(crate) fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
         Ok(self
             .perpetual_tables
             .executed_effects
             .contains_key(digest)?)
     }
 
-    pub fn get_deleted_shared_object_previous_tx_digest(
+    pub(crate) fn get_deleted_shared_object_previous_tx_digest(
         &self,
         object_id: &ObjectID,
         version: &SequenceNumber,
@@ -421,7 +405,7 @@ impl AuthorityStore {
         }
     }
 
-    pub fn is_shared_object_deleted(
+    pub(crate) fn is_shared_object_deleted(
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
@@ -449,28 +433,8 @@ impl AuthorityStore {
         }
     }
 
-    /// Returns future containing the state hash for the given epoch
-    /// once available
-    pub async fn notify_read_root_state_hash(
-        &self,
-        epoch: EpochId,
-    ) -> SuiResult<(CheckpointSequenceNumber, Accumulator)> {
-        // We need to register waiters _before_ reading from the database to avoid race conditions
-        let registration = self.root_state_notify_read.register_one(&epoch);
-        let hash = self.perpetual_tables.root_state_hash_by_epoch.get(&epoch)?;
-
-        let result = match hash {
-            // Note that Some() clause also drops registration that is already fulfilled
-            Some(ready) => Either::Left(futures::future::ready(ready)),
-            None => Either::Right(registration),
-        }
-        .await;
-
-        Ok(result)
-    }
-
     /// Returns true if there are no objects in the database
-    pub fn database_is_empty(&self) -> SuiResult<bool> {
+    pub(crate) fn database_is_empty(&self) -> SuiResult<bool> {
         self.perpetual_tables.database_is_empty()
     }
 
@@ -481,7 +445,7 @@ impl AuthorityStore {
             .await
     }
 
-    pub fn get_object_ref_prior_to_key(
+    pub(crate) fn get_object_ref_prior_to_key(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
@@ -526,7 +490,10 @@ impl AuthorityStore {
     }
 
     /// Get many objects
-    pub fn get_objects(&self, objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
+    pub(crate) fn get_objects(
+        &self,
+        objects: &[ObjectID],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
         let mut result = Vec::new();
         for id in objects {
             result.push(self.get_object(id)?);
@@ -534,7 +501,7 @@ impl AuthorityStore {
         Ok(result)
     }
 
-    pub fn have_received_object_at_version(
+    pub(crate) fn have_received_object_at_version(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
@@ -548,7 +515,7 @@ impl AuthorityStore {
             .is_some_and(|marker_value| marker_value == MarkerValue::Received))
     }
 
-    pub fn have_deleted_owned_object_at_version_or_after(
+    pub(crate) fn have_deleted_owned_object_at_version_or_after(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
@@ -583,7 +550,7 @@ impl AuthorityStore {
     /// versions and types of owned, shared and package objects.
     /// When making changes, please see if check_sequenced_input_objects() below needs
     /// similar changes as well.
-    pub fn get_input_object_locks(
+    pub(crate) fn get_input_object_locks(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
@@ -632,7 +599,7 @@ impl AuthorityStore {
     /// object, we also check if the object exists in the object marker table and view it as
     /// existing if it is in the table.
     #[instrument(level = "trace", skip_all)]
-    pub fn multi_input_objects_available(
+    pub(crate) fn multi_input_objects_available(
         &self,
         keys: impl Iterator<Item = InputKey> + Clone,
         receiving_objects: HashSet<InputKey>,
@@ -713,7 +680,7 @@ impl AuthorityStore {
     /// Attempts to acquire execution lock for an executable transaction.
     /// Returns the lock if the transaction is matching current executed epoch
     /// Returns None otherwise
-    pub async fn execution_lock_for_executable_transaction(
+    pub(crate) async fn execution_lock_for_executable_transaction(
         &self,
         transaction: &VerifiedExecutableTransaction,
     ) -> SuiResult<ExecutionLockReadGuard> {
@@ -777,7 +744,10 @@ impl AuthorityStore {
     }
 
     /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
-    pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
+    pub(crate) async fn insert_objects_unsafe_for_testing_only(
+        &self,
+        objects: &[Object],
+    ) -> SuiResult {
         self.bulk_insert_genesis_objects(objects).await?;
         self.force_reload_system_packages_into_cache();
         Ok(())
@@ -886,7 +856,7 @@ impl AuthorityStore {
         Ok(())
     }
 
-    pub async fn set_epoch_start_configuration(
+    pub(crate) async fn set_epoch_start_configuration(
         &self,
         epoch_start_configuration: &EpochStartConfiguration,
     ) -> SuiResult {
@@ -905,7 +875,7 @@ impl AuthorityStore {
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes objects, certificates, parents and clean up locks atomically.
     #[instrument(level = "debug", skip_all)]
-    pub async fn update_state(
+    pub(crate) async fn update_state(
         &self,
         inner_temporary_store: InnerTemporaryStore,
         transaction: &VerifiedTransaction,
@@ -1359,7 +1329,7 @@ impl AuthorityStore {
     /// Returns UserInputError::ObjectNotFound if cannot find lock record for at least one of the objects.
     /// Returns UserInputError::ObjectVersionUnavailableForConsumption if at least one object lock is not initialized
     ///     at the given version.
-    pub fn check_owned_object_locks_exist(&self, objects: &[ObjectRef]) -> SuiResult {
+    pub(crate) fn check_owned_object_locks_exist(&self, objects: &[ObjectRef]) -> SuiResult {
         let locks = self
             .perpetual_tables
             .owned_object_transaction_locks
@@ -1394,7 +1364,7 @@ impl AuthorityStore {
         )
     }
 
-    pub fn initialize_locks(
+    pub(crate) fn initialize_locks(
         locks_table: &DBMap<ObjectRef, Option<LockDetailsWrapper>>,
         write_batch: &mut DBBatch,
         objects: &[ObjectRef],
@@ -1477,7 +1447,7 @@ impl AuthorityStore {
     /// so that when we receive the checkpoint that includes it from state
     /// sync, we are able to execute the checkpoint.
     /// TODO: implement GC for transactions that are no longer needed.
-    pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
+    pub(crate) async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let Some(effects) = self.get_executed_effects(tx_digest)? else {
             debug!("Not reverting {:?} as it was not executed", tx_digest);
             return Ok(());
@@ -1598,7 +1568,7 @@ impl AuthorityStore {
     /// Returns the latest object we have for this object_id in the objects table.
     ///
     /// If no entry for the object_id is found, return None.
-    pub fn get_latest_object_or_tombstone(
+    pub(crate) fn get_latest_object_or_tombstone(
         &self,
         object_id: ObjectID,
     ) -> Result<Option<(ObjectKey, StoreObjectWrapper)>, SuiError> {
@@ -1606,7 +1576,7 @@ impl AuthorityStore {
             .get_latest_object_or_tombstone(object_id)
     }
 
-    pub fn insert_transaction_and_effects(
+    pub(crate) fn insert_transaction_and_effects(
         &self,
         transaction: &VerifiedTransaction,
         transaction_effects: &TransactionEffects,
@@ -1668,7 +1638,7 @@ impl AuthorityStore {
             .map(|v| v.map(|v| v.into()))
     }
 
-    pub fn get_transactions_and_serialized_sizes<'a>(
+    pub(crate) fn get_transactions_and_serialized_sizes<'a>(
         &self,
         digests: impl IntoIterator<Item = &'a TransactionDigest>,
     ) -> Result<Vec<Option<(VerifiedTransaction, usize)>>, TypedStoreError> {
@@ -1848,7 +1818,7 @@ impl AuthorityStore {
         Ok(())
     }
 
-    pub fn expensive_check_is_consistent_state(
+    pub(crate) fn expensive_check_is_consistent_state(
         &self,
         checkpoint_executor: &CheckpointExecutor,
         accumulator: Arc<StateAccumulator>,
@@ -1888,7 +1858,7 @@ impl AuthorityStore {
     }
 
     #[cfg(test)]
-    pub async fn prune_objects_immediately_for_testing(
+    pub(crate) async fn prune_objects_immediately_for_testing(
         &self,
         transaction_effects: Vec<TransactionEffects>,
     ) -> anyhow::Result<()> {
@@ -1911,7 +1881,7 @@ impl AuthorityStore {
     }
 
     #[cfg(msim)]
-    pub fn remove_all_versions_of_object(&self, object_id: ObjectID) {
+    pub(crate) fn remove_all_versions_of_object(&self, object_id: ObjectID) {
         let entries: Vec<_> = self
             .perpetual_tables
             .objects
