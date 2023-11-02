@@ -610,7 +610,6 @@ impl CheckpointExecutor {
                         .expect("Failed to get executed effects for finalizing checkpoint");
 
                     finalize_checkpoint(
-                        self.authority_store.clone(),
                         &all_tx_digests,
                         epoch_store.clone(),
                         *checkpoint.sequence_number(),
@@ -748,7 +747,6 @@ async fn handle_execution_effects(
                 // the change epoch tx, which is done after all other checkpoint execution
                 if checkpoint.end_of_epoch_data.is_none() {
                     finalize_checkpoint(
-                        authority_store.clone(),
                         &all_tx_digests,
                         epoch_store.clone(),
                         *checkpoint.sequence_number(),
@@ -982,7 +980,6 @@ fn get_unexecuted_transactions(
 }
 
 fn finalize_checkpoint(
-    authority_store: Arc<AuthorityStore>,
     tx_digests: &[TransactionDigest],
     epoch_store: Arc<AuthorityPerEpochStore>,
     checkpoint_sequence: u64,
@@ -992,12 +989,6 @@ fn finalize_checkpoint(
     if epoch_store.per_epoch_finalized_txns_enabled() {
         epoch_store.insert_finalized_transactions(tx_digests, checkpoint_sequence)?;
     }
-    // TODO remove once we no longer need to support this table for read RPC
-    authority_store.deprecated_insert_finalized_transactions(
-        tx_digests,
-        epoch_store.epoch(),
-        checkpoint_sequence,
-    )?;
 
     accumulator.accumulate_checkpoint(effects, checkpoint_sequence, epoch_store)?;
     Ok(())
