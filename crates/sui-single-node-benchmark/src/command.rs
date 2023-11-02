@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 use strum_macros::EnumIter;
 
 #[derive(Parser)]
@@ -66,7 +67,7 @@ pub enum Component {
     CheckpointExecutor,
 }
 
-#[derive(Subcommand, Clone, Copy)]
+#[derive(Subcommand, Clone)]
 pub enum WorkloadKind {
     NoMove,
     Move {
@@ -85,5 +86,12 @@ pub enum WorkloadKind {
             specified by this parameter * 100."
         )]
         computation: u8,
+    },
+    Publish {
+        #[arg(
+            long,
+            help = "Path to the package that you want to benchmark publishing"
+        )]
+        path: PathBuf,
     },
 }

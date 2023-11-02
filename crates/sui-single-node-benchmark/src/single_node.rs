@@ -18,7 +18,7 @@ use sui_core::consensus_adapter::{
 };
 use sui_core::state_accumulator::StateAccumulator;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AccountKeyPair, AuthoritySignature, Signer};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -95,12 +95,13 @@ impl SingleValidator {
     pub async fn publish_package(
         &self,
         path: PathBuf,
+        dependencies: Vec<(String, ObjectID)>,
         sender: SuiAddress,
         keypair: &AccountKeyPair,
         gas: ObjectRef,
     ) -> (ObjectRef, ObjectRef) {
         let transaction = TestTransactionBuilder::new(sender, gas, DEFAULT_VALIDATOR_GAS_PRICE)
-            .publish(path)
+            .publish_with_published_deps(path, dependencies)
             .build_and_sign(keypair);
         let effects = self.execute_raw_transaction(transaction).await;
         let package = effects

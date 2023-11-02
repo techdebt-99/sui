@@ -226,15 +226,31 @@ impl TestTransactionBuilder {
         self.test_data = TestTransactionData::Publish(PublishData {
             path,
             with_unpublished_deps: false,
+            published_dependencies: vec![],
         });
         self
     }
 
-    pub fn publish_with_deps(mut self, path: PathBuf) -> Self {
+    pub fn publish_with_unpublished_deps(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
         self.test_data = TestTransactionData::Publish(PublishData {
             path,
             with_unpublished_deps: true,
+            published_dependencies: vec![],
+        });
+        self
+    }
+
+    pub fn publish_with_published_deps(
+        mut self,
+        path: PathBuf,
+        deps: Vec<(String, ObjectID)>,
+    ) -> Self {
+        assert!(matches!(self.test_data, TestTransactionData::Empty));
+        self.test_data = TestTransactionData::Publish(PublishData {
+            path,
+            with_unpublished_deps: false,
+            published_dependencies: deps,
         });
         self
     }
@@ -288,7 +304,14 @@ impl TestTransactionBuilder {
                 self.gas_price,
             ),
             TestTransactionData::Publish(data) => {
-                let compiled_package = BuildConfig::new_for_testing().build(data.path).unwrap();
+                let mut build_config = BuildConfig::new_for_testing();
+                for (addr_name, obj_id) in data.published_dependencies {
+                    build_config
+                        .config
+                        .additional_named_addresses
+                        .insert(addr_name.to_string(), obj_id.into());
+                }
+                let compiled_package = build_config.build(data.path).unwrap();
                 let all_module_bytes =
                     compiled_package.get_package_bytes(data.with_unpublished_deps);
                 let dependencies = compiled_package.get_dependency_original_package_ids();
@@ -382,6 +405,7 @@ struct PublishData {
     path: PathBuf,
     /// Whether to publish unpublished dependencies in the same transaction or not.
     with_unpublished_deps: bool,
+    published_dependencies: Vec<(String, ObjectID)>,
 }
 
 struct TransferData {
@@ -480,7 +504,7 @@ pub async fn make_publish_transaction_with_deps(
     let gas_price = context.get_reference_gas_price().await.unwrap();
     context.sign_transaction(
         &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .publish_with_deps(path)
+            .publish_with_unpublished_deps(path)
             .build(),
     )
 }

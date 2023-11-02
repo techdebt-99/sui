@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::benchmark_context::BenchmarkContext;
 use crate::mock_account::Account;
 use crate::tx_generator::TxGenerator;
 use move_core_types::identifier::Identifier;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -20,14 +22,24 @@ pub struct MoveTxGenerator {
 }
 
 impl MoveTxGenerator {
-    pub fn new(
-        move_package: ObjectID,
+    pub async fn new(
+        ctx: &mut BenchmarkContext,
         num_input_objects: u8,
         computation: u8,
-        root_objects: HashMap<SuiAddress, ObjectRef>,
+        num_dynamic_fields: u64,
     ) -> Self {
+        assert!(
+            num_input_objects >= 2,
+            "Move transaction requires at least 2 input objects"
+        );
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.extend(["move_package"]);
+        let move_package = ctx.publish_package(path, vec![]).await;
+        let root_objects = ctx
+            .preparing_dynamic_fields(move_package.0, num_dynamic_fields)
+            .await;
         Self {
-            move_package,
+            move_package: move_package.0,
             num_input_objects,
             computation,
             root_objects,

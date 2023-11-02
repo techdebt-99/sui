@@ -64,14 +64,17 @@ impl BenchmarkContext {
         self.validator.clone()
     }
 
-    pub(crate) async fn publish_package(&mut self) -> ObjectRef {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.extend(["move_package"]);
+    pub(crate) async fn publish_package(
+        &mut self,
+        path: PathBuf,
+        dependencies: Vec<(String, ObjectID)>,
+    ) -> ObjectRef {
         let mut gas_objects = self.admin_account.gas_objects.deref().clone();
         let (package, updated_gas) = self
             .validator
             .publish_package(
                 path,
+                dependencies,
                 self.admin_account.sender,
                 &self.admin_account.keypair,
                 gas_objects[0],

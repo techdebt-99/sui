@@ -19,7 +19,7 @@ pub mod workload;
 /// \checkpoint_size represents both the size of a consensus commit, and size of a checkpoint
 /// if we are benchmarking the checkpoint.
 pub async fn run_benchmark(workload: Workload, component: Component, checkpoint_size: usize) {
-    let mut ctx = BenchmarkContext::new(workload, component, checkpoint_size).await;
+    let mut ctx = BenchmarkContext::new(workload.clone(), component, checkpoint_size).await;
     let tx_generator = workload.create_tx_generator(&mut ctx).await;
     let transactions = ctx.generate_transactions(tx_generator).await;
     match component {

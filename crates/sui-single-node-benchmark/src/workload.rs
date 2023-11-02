@@ -3,10 +3,12 @@
 
 use crate::benchmark_context::BenchmarkContext;
 use crate::command::WorkloadKind;
-use crate::tx_generator::{MoveTxGenerator, NonMoveTxGenerator, TxGenerator};
+use crate::tx_generator::{
+    MoveTxGenerator, NonMoveTxGenerator, PackagePublishTxGenerator, TxGenerator,
+};
 use std::sync::Arc;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Workload {
     pub tx_count: u64,
     pub workload_kind: WorkloadKind,
@@ -38,26 +40,17 @@ impl Workload {
             self.num_input_objects >= 1,
             "Each transaction requires at least 1 input object"
         );
-        match self.workload_kind {
+        match self.workload_kind.clone() {
             WorkloadKind::NoMove => Arc::new(NonMoveTxGenerator::new(self.num_input_objects)),
             WorkloadKind::Move {
                 num_dynamic_fields,
                 computation,
-            } => {
-                assert!(
-                    self.num_input_objects >= 2,
-                    "Move transaction requires at least 2 input objects"
-                );
-                let move_package = ctx.publish_package().await;
-                let root_objects = ctx
-                    .preparing_dynamic_fields(move_package.0, num_dynamic_fields)
-                    .await;
-                Arc::new(MoveTxGenerator::new(
-                    move_package.0,
-                    self.num_input_objects,
-                    computation,
-                    root_objects,
-                ))
+            } => Arc::new(
+                MoveTxGenerator::new(ctx, self.num_input_objects, computation, num_dynamic_fields)
+                    .await,
+            ),
+            WorkloadKind::Publish { path } => {
+                Arc::new(PackagePublishTxGenerator::new(ctx, path).await)
             }
         }
     }
