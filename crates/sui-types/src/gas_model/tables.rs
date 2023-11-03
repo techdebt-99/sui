@@ -9,7 +9,7 @@ use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, Num
 use move_core_types::language_storage::ModuleId;
 
 use move_core_types::vm_status::StatusCode;
-#[cfg(debug_assertions)]
+
 use move_vm_profiler::GasProfiler;
 use move_vm_types::gas::{GasMeter, SimpleInstruction};
 use move_vm_types::loaded_data::runtime_types::Type;

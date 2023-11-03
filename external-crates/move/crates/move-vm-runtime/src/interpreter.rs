@@ -19,7 +19,6 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
-#[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 use move_vm_profiler::{
     profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
@@ -241,8 +240,6 @@ impl Interpreter {
                 }
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
-                    // Compiled out in release mode
-                    #[cfg(debug_assertions)]
                     let func_name = func.pretty_string();
                     profile_open_frame!(gas_meter, func_name.clone());
 
@@ -301,8 +298,6 @@ impl Interpreter {
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
-                    // Compiled out in release mode
-                    #[cfg(debug_assertions)]
                     let func_name = func.pretty_string();
                     profile_open_frame!(gas_meter, func_name.clone());
 

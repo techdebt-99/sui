@@ -24,10 +24,8 @@ mod checked {
         account_address::AccountAddress,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
-    #[cfg(debug_assertions)]
     use move_vm_profiler::GasProfiler;
     use move_vm_runtime::{move_vm::MoveVM, session::Session};
-    #[cfg(debug_assertions)]
     use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{

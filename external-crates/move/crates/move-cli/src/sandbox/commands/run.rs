@@ -21,7 +21,7 @@ use move_core_types::{
     value::MoveValue,
 };
 use move_package::compilation::compiled_package::CompiledPackage;
-#[cfg(debug_assertions)]
+
 use move_vm_profiler::GasProfiler;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::gas_schedule::CostTable;

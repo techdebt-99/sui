@@ -18,7 +18,6 @@ use move_core_types::{
     resolver::MoveResolver,
     value::MoveTypeLayout,
 };
-#[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,

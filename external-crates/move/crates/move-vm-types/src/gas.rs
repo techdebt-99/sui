@@ -7,7 +7,6 @@ use move_core_types::{
     gas_algebra::{InternalGas, NumArgs, NumBytes},
     language_storage::ModuleId,
 };
-#[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 
 /// Enum of instructions that do not need extra information for gas metering.

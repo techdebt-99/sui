@@ -25,7 +25,7 @@ use move_core_types::{
     u256,
     vm_status::StatusCode,
 };
-#[cfg(debug_assertions)]
+
 use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},

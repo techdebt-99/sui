@@ -23,7 +23,6 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag, TypeTag},
     vm_status::StatusCode,
 };
-#[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{
     move_vm::MoveVM,

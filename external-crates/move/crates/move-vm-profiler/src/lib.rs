@@ -1,30 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(debug_assertions)]
 use move_vm_config::runtime::VMProfilerConfig;
-#[cfg(debug_assertions)]
 use once_cell::sync::Lazy;
-#[cfg(debug_assertions)]
 use serde::Serialize;
-#[cfg(debug_assertions)]
 use std::collections::BTreeMap;
 
-#[cfg(debug_assertions)]
 const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
 
-#[cfg(debug_assertions)]
 static PROFILER_ENABLED: Lazy<bool> =
     Lazy::new(|| std::env::var(MOVE_VM_PROFILER_ENV_VAR_NAME).is_ok());
 
-#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 pub struct FrameName {
     name: String,
     file: String,
 }
 
-#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 pub struct Shared {
     frames: Vec<FrameName>,
@@ -33,7 +25,6 @@ pub struct Shared {
     frame_table: BTreeMap<String, usize>,
 }
 
-#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 pub struct Event {
     #[serde(rename(serialize = "type"))]
@@ -42,7 +33,6 @@ pub struct Event {
     at: u64,
 }
 
-#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
@@ -55,7 +45,6 @@ pub struct Profile {
     events: Vec<Event>,
 }
 
-#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GasProfiler {
@@ -75,7 +64,6 @@ pub struct GasProfiler {
     finished: bool,
 }
 
-#[cfg(debug_assertions)]
 impl GasProfiler {
     // Used by profiler viz tool
     const OPEN_FRAME_IDENT: &str = "O";
@@ -215,7 +203,6 @@ impl GasProfiler {
     }
 }
 
-#[cfg(debug_assertions)]
 impl Drop for GasProfiler {
     fn drop(&mut self) {
         self.finish();
@@ -224,102 +211,83 @@ impl Drop for GasProfiler {
 
 #[macro_export]
 macro_rules! profile_open_frame {
-    ($gas_meter:expr, $frame_name:expr) => {
-        #[cfg(debug_assertions)]
-        {
-            let gas_rem = $gas_meter.remaining_gas().into();
-            move_vm_profiler::profile_open_frame_impl!(
-                $gas_meter.get_profiler_mut(),
-                $frame_name,
-                gas_rem
-            )
-        }
-    };
+    ($gas_meter:expr, $frame_name:expr) => {{
+        let gas_rem = $gas_meter.remaining_gas().into();
+        move_vm_profiler::profile_open_frame_impl!(
+            $gas_meter.get_profiler_mut(),
+            $frame_name,
+            gas_rem
+        )
+    }};
 }
 
 #[macro_export]
 macro_rules! profile_open_frame_impl {
-    ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
-        #[cfg(debug_assertions)]
-        {
-            if let Some(profiler) = $profiler {
-                let name = if !profiler.config.use_long_function_name {
-                    GasProfiler::short_name(&$frame_name)
-                } else {
-                    $frame_name
-                };
-                profiler.open_frame(name, $frame_name, $gas_rem)
-            }
+    ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {{
+        if let Some(profiler) = $profiler {
+            let name = if !profiler.config.use_long_function_name {
+                GasProfiler::short_name(&$frame_name)
+            } else {
+                $frame_name
+            };
+            profiler.open_frame(name, $frame_name, $gas_rem)
         }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! profile_close_frame {
-    ($gas_meter:expr, $frame_name:expr) => {
-        #[cfg(debug_assertions)]
-        {
-            let gas_rem = $gas_meter.remaining_gas().into();
-            move_vm_profiler::profile_close_frame_impl!(
-                $gas_meter.get_profiler_mut(),
-                $frame_name,
-                gas_rem
-            )
-        }
-    };
+    ($gas_meter:expr, $frame_name:expr) => {{
+        let gas_rem = $gas_meter.remaining_gas().into();
+        move_vm_profiler::profile_close_frame_impl!(
+            $gas_meter.get_profiler_mut(),
+            $frame_name,
+            gas_rem
+        )
+    }};
 }
 
 #[macro_export]
 macro_rules! profile_close_frame_impl {
-    ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {
-        #[cfg(debug_assertions)]
-        {
-            if let Some(profiler) = $profiler {
-                let name = if !profiler.config.use_long_function_name {
-                    GasProfiler::short_name(&$frame_name)
-                } else {
-                    $frame_name.clone()
-                };
-                profiler.close_frame(name, $frame_name, $gas_rem)
-            }
+    ($profiler:expr, $frame_name:expr, $gas_rem:expr) => {{
+        if let Some(profiler) = $profiler {
+            let name = if !profiler.config.use_long_function_name {
+                GasProfiler::short_name(&$frame_name)
+            } else {
+                $frame_name.clone()
+            };
+            profiler.close_frame(name, $frame_name, $gas_rem)
         }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! profile_open_instr {
-    ($gas_meter:expr, $frame_name:expr) => {
-        #[cfg(debug_assertions)]
-        {
-            let gas_rem = $gas_meter.remaining_gas().into();
-            if let Some(profiler) = $gas_meter.get_profiler_mut() {
-                if profiler.config.track_bytecode_instructions {
-                    profiler.open_frame($frame_name.clone(), $frame_name, gas_rem)
-                }
+    ($gas_meter:expr, $frame_name:expr) => {{
+        let gas_rem = $gas_meter.remaining_gas().into();
+        if let Some(profiler) = $gas_meter.get_profiler_mut() {
+            if profiler.config.track_bytecode_instructions {
+                profiler.open_frame($frame_name.clone(), $frame_name, gas_rem)
             }
         }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! profile_close_instr {
-    ($gas_meter:expr, $frame_name:expr) => {
-        #[cfg(debug_assertions)]
-        {
-            let gas_rem = $gas_meter.remaining_gas().into();
-            if let Some(profiler) = $gas_meter.get_profiler_mut() {
-                if profiler.config.track_bytecode_instructions {
-                    profiler.close_frame($frame_name.clone(), $frame_name, gas_rem)
-                }
+    ($gas_meter:expr, $frame_name:expr) => {{
+        let gas_rem = $gas_meter.remaining_gas().into();
+        if let Some(profiler) = $gas_meter.get_profiler_mut() {
+            if profiler.config.track_bytecode_instructions {
+                profiler.close_frame($frame_name.clone(), $frame_name, gas_rem)
             }
         }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! profile_dump_file {
     ($profiler:expr) => {
-        #[cfg(debug_assertions)]
         $profiler.to_file()
     };
 }

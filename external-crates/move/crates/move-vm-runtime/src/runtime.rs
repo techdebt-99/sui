@@ -26,7 +26,6 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-#[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
