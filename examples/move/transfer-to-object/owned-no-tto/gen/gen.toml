@@ -1,0 +1,8 @@
+[config]
+# will be set to mainnet by default if omitted
+rpc = "https://fullnode.devnet.sui.io:443"
+
+[packages]
+# based on source code (syntax same as in Move.toml):
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+common = { local = "../../common" }
