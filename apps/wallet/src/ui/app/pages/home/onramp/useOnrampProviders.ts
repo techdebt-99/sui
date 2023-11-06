@@ -7,6 +7,7 @@ import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import Banxa from './icons/Banxa.svg';
 import Coinbase from './icons/Coinbase.svg';
 import MoonPay from './icons/MoonPay.svg';
 import Transak from './icons/Transak.svg';
@@ -26,6 +27,16 @@ const BACKEND_HOST =
 	process.env.NODE_ENV === 'production' ? 'https://apps-backend.sui.io' : 'http://localhost:3003';
 
 const ONRAMP_PROVIDER: OnrampProvider[] = [
+	{
+		key: 'banxa',
+		name: 'Banxa',
+		icon: Banxa,
+		checkSupported: async () => true,
+		getUrl: async (address) => {
+			const url = `https://mystenlabs.banxa.com/?coinType=SUIf&fiatType=USD&fiatAmount=500&blockchain=SUI&backgroundColor=ffffff&primaryColor=e014c2&secondaryColor=4287f5&textColor=000000&theme=light&walletAddress=${address}`;
+			return url;
+		},
+	},
 	{
 		key: 'coinbase',
 		icon: Coinbase,
