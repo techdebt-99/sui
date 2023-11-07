@@ -91,6 +91,10 @@ name = "generate-genesis-checkpoint"
 path = "src/generate_genesis_checkpoint.rs"
 test = false
 
-[features]
-default = ["gas-profiler"]
-gas-profiler = []
+[[bin]]
+name = "sui"
+path = "src/main.rs"
+
+#[features]
+#default = ["gas-profiler"]
+
