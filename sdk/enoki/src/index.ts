@@ -7,7 +7,7 @@ export {
 	createLocalStorage,
 	createSessionStorage,
 	createInMemoryStorage,
-	type AsyncStore,
+	type SyncStore,
 } from './stores.js';
 export { createDefaultEncryption, type Encryption } from './encryption.js';
 export { EnokiKeypair, EnokiPublicKey } from './EnokiKeypair.js';
