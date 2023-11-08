@@ -11,6 +11,7 @@ use move_package::source_package::manifest_parser::{
 use move_package::source_package::parsed_manifest::{Dependency, DependencyKind};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::is_system_package;
@@ -18,8 +19,7 @@ use sui_types::transaction::{Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
 use tracing::info;
 
 pub struct PackagePublishTxGenerator {
-    path: PathBuf,
-    dependencies: Vec<(String, ObjectID)>,
+    compiled_package: CompiledPackage,
 }
 
 impl PackagePublishTxGenerator {
@@ -41,10 +41,10 @@ impl PackagePublishTxGenerator {
             published.insert(name, package.0);
         }
         published.insert(root_name, ObjectID::ZERO);
-        Self {
-            path,
-            dependencies: published.into_iter().collect(),
-        }
+        let mut build_config =
+            BuildConfig::new_with_named_addresses(published.into_iter().collect());
+        let compiled_package = build_config.build(path).unwrap();
+        Self { compiled_package }
     }
 
     /// Given a path that points to a package root, return the full list of dependent packages paths.
@@ -89,12 +89,14 @@ impl PackagePublishTxGenerator {
 
 impl TxGenerator for PackagePublishTxGenerator {
     fn generate_tx(&self, account: Account) -> Transaction {
+        let all_module_bytes = self.compiled_package.get_package_bytes(false);
+        let dependencies = self.compiled_package.get_dependency_original_package_ids();
         TestTransactionBuilder::new(
             account.sender,
             account.gas_objects[0],
             DEFAULT_VALIDATOR_GAS_PRICE,
         )
-        .publish_with_published_deps(self.path.clone(), self.dependencies.clone())
+        .publish_with_compiled_bytecode(all_module_bytes, dependencies)
         .build_and_sign(account.keypair.as_ref())
     }
 

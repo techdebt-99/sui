@@ -102,6 +102,17 @@ impl BuildConfig {
         build_config
     }
 
+    pub fn new_with_named_addresses(named_addresses: Vec<(String, ObjectID)>) -> Self {
+        let mut build_config = Self::new_for_testing();
+        for (addr_name, obj_id) in named_addresses {
+            build_config
+                .config
+                .additional_named_addresses
+                .insert(addr_name.to_string(), obj_id.into());
+        }
+        build_config
+    }
+
     fn is_test(attributes: &Attributes) -> bool {
         attributes
             .iter()

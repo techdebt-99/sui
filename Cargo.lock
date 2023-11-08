@@ -11539,6 +11539,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-macros",
+ "sui-move-build",
  "sui-protocol-config",
  "sui-simulator",
  "sui-test-transaction-builder",

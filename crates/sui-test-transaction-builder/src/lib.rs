@@ -223,9 +223,9 @@ impl TestTransactionBuilder {
 
     pub fn publish(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData {
-            path,
+        self.test_data = TestTransactionData::Publish(PublishData::Source {
             with_unpublished_deps: false,
+            path,
             published_dependencies: vec![],
         });
         self
@@ -233,9 +233,9 @@ impl TestTransactionBuilder {
 
     pub fn publish_with_unpublished_deps(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData {
-            path,
+        self.test_data = TestTransactionData::Publish(PublishData::Source {
             with_unpublished_deps: true,
+            path,
             published_dependencies: vec![],
         });
         self
@@ -247,10 +247,23 @@ impl TestTransactionBuilder {
         deps: Vec<(String, ObjectID)>,
     ) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData {
-            path,
+        self.test_data = TestTransactionData::Publish(PublishData::Source {
             with_unpublished_deps: false,
+            path,
             published_dependencies: deps,
+        });
+        self
+    }
+
+    pub fn publish_with_compiled_bytecode(
+        mut self,
+        module_bytes: Vec<Vec<u8>>,
+        dependencies: Vec<ObjectID>,
+    ) -> Self {
+        assert!(matches!(self.test_data, TestTransactionData::Empty));
+        self.test_data = TestTransactionData::Publish(PublishData::Compiled {
+            module_bytes,
+            dependencies,
         });
         self
     }
@@ -304,17 +317,25 @@ impl TestTransactionBuilder {
                 self.gas_price,
             ),
             TestTransactionData::Publish(data) => {
-                let mut build_config = BuildConfig::new_for_testing();
-                for (addr_name, obj_id) in data.published_dependencies {
-                    build_config
-                        .config
-                        .additional_named_addresses
-                        .insert(addr_name.to_string(), obj_id.into());
-                }
-                let compiled_package = build_config.build(data.path).unwrap();
-                let all_module_bytes =
-                    compiled_package.get_package_bytes(data.with_unpublished_deps);
-                let dependencies = compiled_package.get_dependency_original_package_ids();
+                let (all_module_bytes, dependencies) = match data {
+                    PublishData::Source {
+                        path,
+                        published_dependencies,
+                        with_unpublished_deps,
+                    } => {
+                        let mut build_config =
+                            BuildConfig::new_with_named_addresses(published_dependencies);
+                        let compiled_package = build_config.build(path).unwrap();
+                        let all_module_bytes =
+                            compiled_package.get_package_bytes(with_unpublished_deps);
+                        let dependencies = compiled_package.get_dependency_original_package_ids();
+                        (all_module_bytes, dependencies)
+                    }
+                    PublishData::Compiled {
+                        module_bytes,
+                        dependencies,
+                    } => (module_bytes, dependencies),
+                };
 
                 TransactionData::new_module(
                     self.sender,
@@ -401,11 +422,17 @@ struct MoveData {
     type_args: Vec<TypeTag>,
 }
 
-struct PublishData {
-    path: PathBuf,
-    /// Whether to publish unpublished dependencies in the same transaction or not.
-    with_unpublished_deps: bool,
-    published_dependencies: Vec<(String, ObjectID)>,
+enum PublishData {
+    Source {
+        path: PathBuf,
+        published_dependencies: Vec<(String, ObjectID)>,
+        /// Whether to publish unpublished dependencies in the same transaction or not.
+        with_unpublished_deps: bool,
+    },
+    Compiled {
+        module_bytes: Vec<Vec<u8>>,
+        dependencies: Vec<ObjectID>,
+    },
 }
 
 struct TransferData {
