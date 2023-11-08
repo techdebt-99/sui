@@ -227,27 +227,22 @@ impl DBCheckpointHandler {
                 info!("Copying db checkpoint for epoch: {epoch} to remote storage");
                 copy_recursively(
                     db_path,
-                    self.input_object_store.clone(),
-                    self.output_object_store.clone(),
+                    &self.input_object_store,
+                    &self.output_object_store,
                     NonZeroUsize::new(20).unwrap(),
                 )
                 .await?;
                 // Drop marker in the output directory that upload completed successfully
                 let bytes = Bytes::from_static(b"success");
                 let success_marker = db_path.child(SUCCESS_MARKER);
-                put(
-                    &success_marker,
-                    bytes.clone(),
-                    self.output_object_store.clone(),
-                )
-                .await?;
+                put(&self.output_object_store, &success_marker, bytes.clone()).await?;
             }
             let bytes = Bytes::from_static(b"success");
             let upload_completed_marker = db_path.child(UPLOAD_COMPLETED_MARKER);
             put(
+                &self.input_object_store,
                 &upload_completed_marker,
                 bytes.clone(),
-                self.input_object_store.clone(),
             )
             .await?;
         }

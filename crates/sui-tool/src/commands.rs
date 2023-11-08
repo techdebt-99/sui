@@ -254,9 +254,12 @@ pub enum ToolCommand {
         archive_bucket: Option<String>,
         #[clap(long = "archive-bucket-type", default_value = "s3")]
         archive_bucket_type: ObjectStoreType,
+        /// If true, no authentication is needed for snapshot restores
+        #[clap(long = "no-sign-request")]
+        no_sign_request: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
-        #[clap(long = "formal")]
+        #[clap(long = "verbose")]
         verbose: bool,
     },
 
@@ -461,6 +464,7 @@ impl ToolCommand {
                 snapshot_path,
                 archive_bucket,
                 archive_bucket_type,
+                no_sign_request,
                 verbose,
             } => {
                 if !verbose {
@@ -504,47 +508,66 @@ impl ToolCommand {
                 let skip_checkpoints = skip_checkpoints || formal;
 
                 let snapshot_store_config = match snapshot_bucket_type {
-                    ObjectStoreType::S3 => {
-                        ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::S3),
-                            bucket: Some(snapshot_bucket),
-                            aws_access_key_id: Some(env::var(
-                                "AWS_SNAPSHOT_ACCESS_KEY_ID",
-                            ).map_err(|_| anyhow!("Please provide AWS_SNAPSHOT_ACCESS_KEY_ID as env variable"))?),
-                            aws_secret_access_key: Some(env::var(
-                                "AWS_SNAPSHOT_SECRET_ACCESS_KEY",
-                            ).map_err(|_| anyhow!("Please provide AWS_SNAPSHOT_SECRET_ACCESS_KEY as env variable"))?),
-                            aws_region: Some(env::var(
-                                "AWS_SNAPSHOT_REGION",
-                            ).map_err(|_| anyhow!("Please provide AWS_SNAPSHOT_REGION as env variable"))?),
-                            object_store_connection_limit: 200,
-                            ..Default::default()
-                        }
+                    ObjectStoreType::S3 => ObjectStoreConfig {
+                        object_store: Some(ObjectStoreType::S3),
+                        bucket: Some(snapshot_bucket),
+                        aws_access_key_id: if no_sign_request {
+                            None
+                        } else {
+                            Some(env::var("AWS_SNAPSHOT_ACCESS_KEY_ID").map_err(|_| {
+                                anyhow!("Please provide AWS_SNAPSHOT_ACCESS_KEY_ID as env variable")
+                            })?)
+                        },
+                        aws_secret_access_key: if no_sign_request {
+                            None
+                        } else {
+                            Some(env::var("AWS_SNAPSHOT_SECRET_ACCESS_KEY").map_err(|_| {
+                                anyhow!(
+                                    "Please provide AWS_SNAPSHOT_SECRET_ACCESS_KEY as env variable"
+                                )
+                            })?)
+                        },
+                        aws_region: Some(env::var("AWS_SNAPSHOT_REGION").map_err(|_| {
+                            anyhow!("Please provide AWS_SNAPSHOT_REGION as env variable")
+                        })?),
+                        object_store_connection_limit: 200,
+                        no_sign_request,
+                        ..Default::default()
                     },
-                    ObjectStoreType::GCS => {
-                        ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::GCS),
-                            bucket: Some(snapshot_bucket),
-                            google_service_account: Some(env::var(
-                                "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
-                            ).map_err(|_| anyhow!("Please provide GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH as env variable"))?),
-                            object_store_connection_limit: 200,
-                            ..Default::default()
-                        }
+                    ObjectStoreType::GCS => ObjectStoreConfig {
+                        object_store: Some(ObjectStoreType::GCS),
+                        bucket: Some(snapshot_bucket),
+                        google_service_account: if no_sign_request {
+                            None
+                        } else {
+                            Some(env::var(
+                                    "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
+                                ).map_err(|_| anyhow!("Please provide GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH as env variable"))?)
+                        },
+                        object_store_connection_limit: 200,
+                        no_sign_request,
+                        ..Default::default()
                     },
-                    ObjectStoreType::Azure => {
-                        ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::Azure),
-                            bucket: Some(snapshot_bucket),
-                            azure_storage_account: Some(env::var(
-                                "AZURE_SNAPSHOT_STORAGE_ACCOUNT",
-                            ).map_err(|_| anyhow!("Please provide AZURE_SNAPSHOT_STORAGE_ACCOUNT as env variable"))?),
-                            azure_storage_access_key: Some(env::var(
-                                "AZURE_SNAPSHOT_STORAGE_ACCESS_KEY",
-                            ).map_err(|_| anyhow!("Please provide AZURE_SNAPSHOT_STORAGE_ACCESS_KEY as env variable"))?),
-                            object_store_connection_limit: 200,
-                            ..Default::default()
-                        }
+                    ObjectStoreType::Azure => ObjectStoreConfig {
+                        object_store: Some(ObjectStoreType::Azure),
+                        bucket: Some(snapshot_bucket),
+                        azure_storage_account: Some(
+                            env::var("AZURE_SNAPSHOT_STORAGE_ACCOUNT").map_err(|_| {
+                                anyhow!(
+                                    "Please provide AZURE_SNAPSHOT_STORAGE_ACCOUNT as env variable"
+                                )
+                            })?,
+                        ),
+                        azure_storage_access_key: if no_sign_request {
+                            None
+                        } else {
+                            Some(env::var(
+                                    "AZURE_SNAPSHOT_STORAGE_ACCESS_KEY",
+                                ).map_err(|_| anyhow!("Please provide AZURE_SNAPSHOT_STORAGE_ACCESS_KEY as env variable"))?)
+                        },
+                        object_store_connection_limit: 200,
+                        no_sign_request,
+                        ..Default::default()
                     },
                     ObjectStoreType::File => {
                         if snapshot_path.is_some() {
@@ -554,55 +577,78 @@ impl ToolCommand {
                                 ..Default::default()
                             }
                         } else {
-                            panic!("--snapshot-path must be specified for --snapshot-bucket-type=file");
+                            panic!(
+                                "--snapshot-path must be specified for --snapshot-bucket-type=file"
+                            );
                         }
                     }
                 };
 
                 let archive_store_config = match archive_bucket_type {
-                    ObjectStoreType::S3 => {
-                        ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::S3),
-                            bucket: Some(archive_bucket),
-                            aws_access_key_id: Some(env::var(
-                                "AWS_ARCHIVE_ACCESS_KEY_ID",
-                            ).map_err(|_| anyhow!("Please provide AWS_ARCHIVE_ACCESS_KEY_ID as env variable"))?),
-                            aws_secret_access_key: Some(env::var(
-                                "AWS_ARCHIVE_SECRET_ACCESS_KEY",
-                            ).map_err(|_| anyhow!("Please provide AWS_ARCHIVE_SECRET_ACCESS_KEY as env variable"))?),
-                            aws_region: Some(env::var(
-                                "AWS_ARCHIVE_REGION",
-                            ).map_err(|_| anyhow!("Please provide AWS_ARCHIVE_REGION as env variable"))?),
-                            object_store_connection_limit: 200,
-                            ..Default::default()
-                        }
+                    ObjectStoreType::S3 => ObjectStoreConfig {
+                        object_store: Some(ObjectStoreType::S3),
+                        bucket: Some(archive_bucket),
+                        aws_access_key_id: if no_sign_request {
+                            None
+                        } else {
+                            Some(env::var("AWS_ARCHIVE_ACCESS_KEY_ID").map_err(|_| {
+                                anyhow!("Please provide AWS_ARCHIVE_ACCESS_KEY_ID as env variable")
+                            })?)
+                        },
+                        aws_secret_access_key: if no_sign_request {
+                            None
+                        } else {
+                            Some(env::var("AWS_ARCHIVE_SECRET_ACCESS_KEY").map_err(|_| {
+                                anyhow!(
+                                    "Please provide AWS_ARCHIVE_SECRET_ACCESS_KEY as env variable"
+                                )
+                            })?)
+                        },
+                        aws_region: Some(env::var("AWS_ARCHIVE_REGION").map_err(|_| {
+                            anyhow!("Please provide AWS_ARCHIVE_REGION as env variable")
+                        })?),
+                        object_store_connection_limit: 200,
+                        no_sign_request,
+                        ..Default::default()
                     },
-                    ObjectStoreType::GCS => {
-                        ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::GCS),
-                            bucket: Some(archive_bucket),
-                            google_service_account: Some(env::var(
-                                "GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH",
-                            ).map_err(|_| anyhow!("Please provide GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH as env variable"))?),
-                            object_store_connection_limit: 200,
-                            ..Default::default()
-                        }
+                    ObjectStoreType::GCS => ObjectStoreConfig {
+                        object_store: Some(ObjectStoreType::GCS),
+                        bucket: Some(archive_bucket),
+                        google_service_account: if no_sign_request {
+                            None
+                        } else {
+                            Some(env::var(
+                                    "GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH",
+                                ).map_err(|_| anyhow!("Please provide GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH as env variable"))?)
+                        },
+                        object_store_connection_limit: 200,
+                        no_sign_request,
+                        ..Default::default()
                     },
-                    ObjectStoreType::Azure => {
-                        ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::Azure),
-                            bucket: Some(archive_bucket),
-                            azure_storage_account: Some(env::var(
-                                "AZURE_ARCHIVE_STORAGE_ACCOUNT",
-                            ).map_err(|_| anyhow!("Please provide AZURE_ARCHIVE_STORAGE_ACCOUNT as env variable"))?),
-                            azure_storage_access_key: Some(env::var(
-                                "AZURE_ARCHIVE_STORAGE_ACCESS_KEY",
-                            ).map_err(|_| anyhow!("Please provide AZURE_ARCHIVE_STORAGE_ACCESS_KEY as env variable"))?),
-                            object_store_connection_limit: 200,
-                            ..Default::default()
-                        }
+                    ObjectStoreType::Azure => ObjectStoreConfig {
+                        object_store: Some(ObjectStoreType::Azure),
+                        bucket: Some(archive_bucket),
+                        azure_storage_account: Some(
+                            env::var("AZURE_ARCHIVE_STORAGE_ACCOUNT").map_err(|_| {
+                                anyhow!(
+                                    "Please provide AZURE_ARCHIVE_STORAGE_ACCOUNT as env variable"
+                                )
+                            })?,
+                        ),
+                        azure_storage_access_key: if no_sign_request {
+                            None
+                        } else {
+                            Some(env::var(
+                                    "AZURE_ARCHIVE_STORAGE_ACCESS_KEY",
+                                ).map_err(|_| anyhow!("Please provide AZURE_ARCHIVE_STORAGE_ACCESS_KEY as env variable"))?)
+                        },
+                        object_store_connection_limit: 200,
+                        no_sign_request,
+                        ..Default::default()
                     },
-                    ObjectStoreType::File => panic!("Download from local filesystem is not supported")
+                    ObjectStoreType::File => {
+                        panic!("Download from local filesystem is not supported")
+                    }
                 };
 
                 if formal {
