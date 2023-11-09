@@ -60,6 +60,7 @@ impl DynamicField {
         let undecorated: Option<value::MoveValue>;
 
         let name_move_value = extract_field_from_move_struct(move_struct, "name")?;
+        println!("Before inner or undecorate: {:?}", name_move_value);
 
         if self.df_kind == DynamicFieldType::DynamicObject {
             let inner_name_move_value = match name_move_value {
@@ -68,10 +69,14 @@ impl DynamicField {
                 }
                 _ => Err(Error::Internal("Expected a wrapper struct".to_string()).extend()),
             }?;
+            println!("type tag: {}", type_tag.to_canonical_string(true));
+            println!("Should be undecorated");
             undecorated = Some(inner_name_move_value.undecorate());
         } else {
             undecorated = Some(name_move_value.undecorate());
         }
+
+        println!("Undecorated: {:?}", undecorated);
 
         let bcs = if let Some(ref undec) = undecorated {
             bcs::to_bytes(undec)
@@ -79,6 +84,34 @@ impl DynamicField {
         } else {
             Err(Error::Internal("No value to serialize".to_string()).extend())
         }?;
+
+        let parent_object_id =
+            SuiAddress::from_bytes(self.stored_object.owner_id.clone().unwrap().as_slice())?;
+
+        let derived_id =
+            sui_types::dynamic_field::derive_dynamic_field_id(parent_object_id, &type_tag, &bcs)
+                .expect("oops");
+
+        let dynamic_object_field_struct =
+            sui_types::dynamic_field::DynamicFieldInfo::dynamic_object_field_wrapper(
+                type_tag.clone(),
+            );
+        let dynamic_object_field_type = TypeTag::Struct(Box::new(dynamic_object_field_struct));
+        let dynamic_object_field_id = sui_types::dynamic_field::derive_dynamic_field_id(
+            parent_object_id,
+            &dynamic_object_field_type,
+            &bcs,
+        )
+        .expect("deriving dynamic field id can't fail");
+
+        println!("self.df_object_id: {}", self.df_object_id);
+        println!("type_tag: {}", type_tag.to_canonical_string(true));
+        println!("derived df_obj_id: {}", derived_id);
+        println!(
+            "type_tag: {}",
+            dynamic_object_field_type.to_canonical_string(true)
+        );
+        println!("derive wrapped_id: {}", dynamic_object_field_id);
 
         Ok(Some(MoveValue::new(
             type_tag.to_canonical_string(true),
