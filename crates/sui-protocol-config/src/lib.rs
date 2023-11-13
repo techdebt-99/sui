@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 31;
+const MAX_PROTOCOL_VERSION: u64 = 32;
 
 // Record history of protocol version allocations here:
 //
@@ -1622,11 +1622,6 @@ impl ProtocolConfig {
                     }
 
                     cfg.random_beacon_reduction_allowed_delta = Some(800);
-                    // Only enable random beacon on devnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.narwhal_header_v2 = true;
-                        cfg.feature_flags.random_beacon = true;
-                    }
                     // Only enable effects v2 on devnet and testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_effects_v2 = true;
@@ -1644,6 +1639,13 @@ impl ProtocolConfig {
                     // Only enable shared object deletion on devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shared_object_deletion = true;
+                    }
+                }
+                32 => {
+                    // Only enable random beacon on devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.narwhal_header_v2 = true;
+                        cfg.feature_flags.random_beacon = true;
                     }
                 }
                 // Use this template when making changes:
