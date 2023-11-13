@@ -23,17 +23,6 @@ pub(crate) struct DynamicField {
     pub df_kind: DynamicFieldType,
 }
 
-/// The string type, data, and serialized value of a DynamicField's 'name' field.
-#[derive(SimpleObject)]
-pub(crate) struct TypedDynamicFieldName {
-    /// A string flag of 'DynamicField' or 'DynamicObject'.
-    /// This is needed to disambiguate the child object,
-    /// as it is possible for a dynamic field and a dynamic object field to share the same name.
-    pub kind: String,
-    #[graphql(flatten)]
-    name: MoveValue,
-}
-
 #[derive(Union)]
 pub(crate) enum DynamicFieldValue {
     MoveObject(MoveObject), // DynamicObject
@@ -55,9 +44,19 @@ pub(crate) struct DynamicFieldName {
 
 #[Object]
 impl DynamicField {
+    /// A string flag of 'DynamicField' or 'DynamicObject'.
+    /// This is needed to disambiguate the child object,
+    /// as it is possible for a dynamic field and a dynamic object field to share the same name.
+    async fn kind(&self) -> &str {
+        match self.df_kind {
+            DynamicFieldType::DynamicField => "DynamicField",
+            DynamicFieldType::DynamicObject => "DynamicObject",
+        }
+    }
+
     /// The string type, data, and serialized value of the DynamicField's 'name' field.
-    /// This field is used to uniquely identify a child of the parent object.
-    async fn name(&self, ctx: &Context<'_>) -> Result<Option<TypedDynamicFieldName>> {
+    /// This field is used in conjunction with the 'kind' field to uniquely identify a child of the parent object.
+    async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
         let resolver: &Resolver<PackageCache> = ctx.data().map_err(|_| {
             graphql_error(
                 code::INTERNAL_SERVER_ERROR,
@@ -95,10 +94,10 @@ impl DynamicField {
             Err(Error::Internal("No value to serialize".to_string()).extend())
         }?;
 
-        Ok(Some(TypedDynamicFieldName {
-            kind: self.df_kind.to_string(),
-            name: MoveValue::new(type_tag.to_canonical_string(true), Base64::from(bcs)),
-        }))
+        Ok(Some(MoveValue::new(
+            type_tag.to_canonical_string(true),
+            Base64::from(bcs),
+        )))
     }
 
     /// The actual data stored in the dynamic field.
