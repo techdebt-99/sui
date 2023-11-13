@@ -12,10 +12,10 @@ import { Secp256r1Keypair } from '../keypairs/secp256r1/keypair.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import type { ExportedKeypair, Keypair } from './keypair.js';
 import { LEGACY_PRIVATE_KEY_SIZE, PRIVATE_KEY_SIZE } from './keypair.js';
-import { decodeMultiSig } from './multisig.js';
+import { decodeMultisigStruct, SIGNATURE_SCHEME_TO_PUBLIC_KEY } from './multisig.js';
 import type { PublicKey } from './publickey.js';
-import { SIGNATURE_FLAG_TO_SCHEME } from './signature-scheme.js';
 import type { SignatureScheme } from './signature-scheme.js';
+import { parseSerializedSignature } from './signature.js';
 import type { SerializedSignature } from './signature.js';
 
 /**
@@ -35,42 +35,40 @@ export type SignaturePubkeyPair = {
 export function toParsedSignaturePubkeyPair(
 	serializedSignature: SerializedSignature,
 ): SignaturePubkeyPair[] {
-	const bytes = fromB64(serializedSignature);
-	const signatureScheme =
-		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
+	const { signatureScheme, publicKey, signature, bytes, multisig } =
+		parseSerializedSignature(serializedSignature);
 
-	if (signatureScheme === 'MultiSig') {
-		try {
-			return decodeMultiSig(serializedSignature);
-		} catch (e) {
-			// Legacy format multisig do not render.
-			throw new Error('legacy multisig viewing unsupported');
-		}
+	switch (signatureScheme) {
+		case 'MultiSig':
+			try {
+				return decodeMultisigStruct(multisig);
+			} catch (e) {
+				// Legacy format multisig do not render.
+				throw new Error('legacy multisig viewing unsupported');
+			}
+		case 'ZkLogin':
+			return [
+				{
+					signatureScheme,
+					signature: bytes,
+					pubKey: publicKey,
+				},
+			];
+		case 'ED25519':
+		case 'Secp256k1':
+		case 'Secp256r1':
+			const PublicKey = SIGNATURE_SCHEME_TO_PUBLIC_KEY[signatureScheme];
+			const pubKey = new PublicKey(publicKey);
+			return [
+				{
+					signatureScheme,
+					signature,
+					pubKey,
+				},
+			];
+		default:
+			throw new Error('Unsupported signature scheme');
 	}
-
-	if (signatureScheme === 'ZkLogin') {
-		throw new Error('ZkLogin signature not supported');
-	}
-
-	const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
-		ED25519: Ed25519PublicKey,
-		Secp256k1: Secp256k1PublicKey,
-		Secp256r1: Secp256r1PublicKey,
-	};
-
-	const PublicKey = SIGNATURE_SCHEME_TO_PUBLIC_KEY[signatureScheme];
-
-	const signature = bytes.slice(1, bytes.length - PublicKey.SIZE);
-	const pubkeyBytes = bytes.slice(1 + signature.length);
-	const pubKey = new PublicKey(pubkeyBytes);
-
-	return [
-		{
-			signatureScheme,
-			signature,
-			pubKey,
-		},
-	];
 }
 
 /// Expects to parse a single signature pubkey pair from the serialized

@@ -9,6 +9,8 @@ import { bcs } from '../bcs/index.js';
 import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
 import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
+import { ZkLoginPublicIdentifier } from '../keypairs/zklogin/publickey.js';
+import type { MultiSigStruct } from '../multisig/publickey.js';
 import { MAX_SIGNER_IN_MULTISIG, MIN_SIGNER_IN_MULTISIG } from '../multisig/publickey.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { PublicKey } from './publickey.js';
@@ -29,12 +31,14 @@ export type PubkeyWeightPair = {
 export type CompressedSignature =
 	| { ED25519: number[] }
 	| { Secp256k1: number[] }
-	| { Secp256r1: number[] };
+	| { Secp256r1: number[] }
+	| { ZkLogin: number[] };
 
 export type PublicKeyEnum =
 	| { ED25519: number[] }
 	| { Secp256k1: number[] }
-	| { Secp256r1: number[] };
+	| { Secp256r1: number[] }
+	| { ZkLogin: number[] };
 
 export type PubkeyEnumWeightPair = {
 	pubKey: PublicKeyEnum;
@@ -52,6 +56,12 @@ export type MultiSig = {
 	multisig_pk: MultiSigPublicKey;
 };
 
+export const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
+	ED25519: Ed25519PublicKey,
+	Secp256k1: Secp256k1PublicKey,
+	Secp256r1: Secp256r1PublicKey,
+	ZkLogin: ZkLoginPublicIdentifier,
+};
 /// Derives a multisig address from a list of pk and weights and threshold.
 // It is the 32-byte Blake2b hash of the serializd bytes of `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1
 /// || ... || flag_n || pk_n || weight_n`
@@ -126,6 +136,10 @@ export function combinePartialSigs(
 			compressed_sigs[i] = { Secp256k1: bytes };
 		} else if (parsed.signatureScheme === 'Secp256r1') {
 			compressed_sigs[i] = { Secp256r1: bytes };
+		} else if (parsed.signatureScheme === 'ZkLogin') {
+			compressed_sigs[i] = { ZkLogin: bytes };
+		} else {
+			throw new Error(`Unsupported signature scheme ${parsed.signatureScheme}`);
 		}
 		for (let j = 0; j < pks.length; j++) {
 			if (parsed.pubKey.equals(pks[j].pubKey)) {
@@ -140,14 +154,14 @@ export function combinePartialSigs(
 		multisig_pk,
 	};
 
-	const bytes = bcs.MultiSig.serialize(multisig).toBytes();
+	const bytes = bcs.MultiSig.serialize(multisig, { maxSize: 2048 }).toBytes();
 	let tmp = new Uint8Array(bytes.length + 1);
 	tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 	tmp.set(bytes, 1);
 	return toB64(tmp);
 }
 
-/// Decode a multisig signature into a list of signatures, public keys and flags.
+/// Decode a serialized signature string into a list of signatures, public keys and flags.
 export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
 	const parsed = fromB64(signature);
 	if (parsed.length < 1 || parsed[0] !== SIGNATURE_SCHEME_TO_FLAG['MultiSig']) {
@@ -155,6 +169,11 @@ export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
 	}
 
 	const multisig: MultiSig = bcs.MultiSig.parse(parsed.slice(1));
+	return decodeMultisigStruct(multisig);
+}
+
+/// Decode a multisig struct into a list of signatures, public keys and flags.
+export function decodeMultisigStruct(multisig: MultiSigStruct): SignaturePubkeyPair[] {
 	let res: SignaturePubkeyPair[] = new Array(multisig.sigs.length);
 	for (let i = 0; i < multisig.sigs.length; i++) {
 		let s: CompressedSignature = multisig.sigs[i];
@@ -165,16 +184,6 @@ export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
 		if (scheme === 'MultiSig') {
 			throw new Error('MultiSig is not supported inside MultiSig');
 		}
-
-		if (scheme === 'ZkLogin') {
-			throw new Error('ZkLogin is not supported inside MultiSig');
-		}
-
-		const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
-			ED25519: Ed25519PublicKey,
-			Secp256k1: Secp256k1PublicKey,
-			Secp256r1: Secp256r1PublicKey,
-		};
 
 		const PublicKey = SIGNATURE_SCHEME_TO_PUBLIC_KEY[scheme];
 
@@ -187,7 +196,6 @@ export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
 	}
 	return res;
 }
-
 function toPkWeightPair(pair: PubkeyWeightPair): PubkeyEnumWeightPair {
 	let pk_bytes = Array.from(pair.pubKey.toRawBytes().map((x) => Number(x)));
 	switch (pair.pubKey.flag()) {
@@ -209,6 +217,13 @@ function toPkWeightPair(pair: PubkeyWeightPair): PubkeyEnumWeightPair {
 			return {
 				pubKey: {
 					ED25519: pk_bytes,
+				},
+				weight: pair.weight,
+			};
+		case SIGNATURE_SCHEME_TO_FLAG['ZkLogin']:
+			return {
+				pubKey: {
+					ZkLogin: pk_bytes,
 				},
 				weight: pair.weight,
 			};
