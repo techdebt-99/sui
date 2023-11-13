@@ -78,7 +78,7 @@ pub trait AuthenticatorTrait {
         if let Some(epoch) = epoch {
             self.verify_user_authenticator_epoch(epoch)?;
         }
-        // when invoked from verify_authenticator, always check author. 
+        // when invoked from verify_authenticator, always check author.
         self.verify_claims(value, author, aux_verify_data, true)
     }
 

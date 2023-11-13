@@ -35,7 +35,7 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	 * Checks if two zkLogin public identifiers are equal
 	 */
 	override equals(publicKey: ZkLoginPublicIdentifier): boolean {
-		return super.equals(publicKey);
+		throw Error('not implemented');
 	}
 
 	/**
