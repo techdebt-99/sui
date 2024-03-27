@@ -54,9 +54,9 @@ if [ -n "$LOCAL_MSIM_PATH" ]; then
 else
   cargo_patch_args=(
     --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.tokio.rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8"'
+    --config 'patch.crates-io.tokio.rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89"'
     --config 'patch.crates-io.futures-timer.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.futures-timer.rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8"'
+    --config 'patch.crates-io.futures-timer.rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89"'
   )
 fi
 
@@ -74,16 +74,6 @@ if [ -n "$USE_MOCK_CRYPTO" ]; then
     --config 'patch.crates-io.blst.rev = "630ca4d55de8e199e62c5b6a695c702d95fe6498"'
   )
 fi
-
-TARGET=$(rustc -vV | grep host | sed 's/^host: //')
-if [ -z "$TARGET" ]; then
-  echo "Failed to determine target from rustc -vV"
-  exit 1
-fi
-
-# set target so that cargo runs in cross compilation mode. needed so that build
-# scripts are not built with the simulator
-export CARGO_BUILD_TARGET="$TARGET"
 
 RUST_FLAGS=$(IFS=, ; echo "${RUST_FLAGS[*]}")
 
